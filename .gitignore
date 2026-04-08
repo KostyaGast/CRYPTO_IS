@@ -1,0 +1,30 @@
+# Виртуальное окружение
+venv/
+env/
+.venv/
+
+# Файлы с секретами
+.env
+.streamlit/secrets.toml
+google_credentials.json
+
+# База данных и кэш
+data/*.db
+data/*.json
+
+# Кэш Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# IDE
+.vscode/
+.idea/
+
+# Логи
+*.log
+
+# Системные файлы
+.DS_Store
+Thumbs.db
