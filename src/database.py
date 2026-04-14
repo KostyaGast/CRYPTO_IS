@@ -1,6 +1,6 @@
 """
 Модуль работы с базой данных SQLite.
-Хранение пользователей, сброс пароля через email.
+Хранение пользователей, сброс пароля, привязка Яндекс ID.
 """
 import sqlite3
 import hashlib
@@ -31,6 +31,7 @@ def init_database():
             username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
             email TEXT UNIQUE,
+            yandex_id TEXT UNIQUE,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             last_login TIMESTAMP
         )
@@ -48,6 +49,15 @@ def init_database():
         )
     """)
     
+    # Проверяем наличие колонок (для старых версий)
+    cursor.execute("PRAGMA table_info(users)")
+    columns = [col[1] for col in cursor.fetchall()]
+    
+    if 'email' not in columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN email TEXT")
+    if 'yandex_id' not in columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN yandex_id TEXT")
+    
     conn.commit()
     conn.close()
 
@@ -56,27 +66,20 @@ def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
 def register_user(username: str, password: str, email: str = "") -> Tuple[bool, str]:
-    """
-    Регистрация нового пользователя.
-    Проверяет уникальность username и email.
-    """
+    """Регистрация нового пользователя."""
     conn = get_connection()
     cursor = conn.cursor()
     
-    # Проверка уникальности username
     cursor.execute("SELECT id FROM users WHERE username = ?", (username,))
     if cursor.fetchone():
         conn.close()
         return False, "❌ Пользователь с таким логином уже существует"
     
-    # Проверка уникальности email (если указан)
     if email and email.strip():
         cursor.execute("SELECT id FROM users WHERE email = ?", (email,))
         if cursor.fetchone():
             conn.close()
             return False, "❌ Этот email уже зарегистрирован"
-    if not email or email.strip() == "":
-        return False, "❌ Email обязателен для регистрации"
     
     try:
         password_hash = hash_password(password)
@@ -86,34 +89,25 @@ def register_user(username: str, password: str, email: str = "") -> Tuple[bool, 
         )
         conn.commit()
         return True, "✅ Регистрация успешна!"
-    except sqlite3.IntegrityError as e:
-        if "UNIQUE constraint failed: users.email" in str(e):
-            return False, "❌ Этот email уже зарегистрирован"
-        elif "UNIQUE constraint failed: users.username" in str(e):
-            return False, "❌ Пользователь с таким логином уже существует"
-        return False, f"❌ Ошибка: {e}"
     except Exception as e:
         return False, f"❌ Ошибка: {e}"
     finally:
         conn.close()
 
-def login_user(login: str, password: str) -> Tuple[bool, str, Optional[dict]]:
-    """
-    Вход пользователя по логину ИЛИ email.
-    """
+def login_user(username: str, password: str) -> Tuple[bool, str, Optional[dict]]:
+    """Вход пользователя по логину или email."""
     conn = get_connection()
     cursor = conn.cursor()
     
-    # Ищем пользователя по логину ИЛИ email
     cursor.execute(
         "SELECT * FROM users WHERE username = ? OR email = ?",
-        (login, login)
+        (username, username)
     )
     user = cursor.fetchone()
     
     if not user:
         conn.close()
-        return False, "❌ Пользователь с таким логином или email не найден", None
+        return False, "❌ Пользователь не найден", None
     
     password_hash = hash_password(password)
     if user["password_hash"] != password_hash:
@@ -131,10 +125,119 @@ def login_user(login: str, password: str) -> Tuple[bool, str, Optional[dict]]:
         "id": user["id"],
         "username": user["username"],
         "email": user["email"],
+        "yandex_id": user["yandex_id"],
         "created_at": user["created_at"]
     }
     
     return True, "✅ Вход выполнен", user_data
+
+def get_user_by_id(user_id: int) -> Optional[dict]:
+    """Получение пользователя по ID."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+    user = cursor.fetchone()
+    conn.close()
+    
+    if user:
+        return {
+            "id": user["id"],
+            "username": user["username"],
+            "email": user["email"],
+            "yandex_id": user["yandex_id"],
+            "created_at": user["created_at"]
+        }
+    return None
+
+def get_user_by_yandex_id(yandex_id: str) -> Optional[dict]:
+    """Ищет пользователя по Яндекс ID."""
+    if not yandex_id:
+        return None
+    
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE yandex_id = ?", (yandex_id,))
+    user = cursor.fetchone()
+    conn.close()
+    
+    if user:
+        return {
+            "id": user["id"],
+            "username": user["username"],
+            "email": user["email"],
+            "yandex_id": user["yandex_id"]
+        }
+    return None
+
+def create_user_from_yandex(yandex_id: str, username: str, email: str) -> Tuple[bool, str, Optional[int]]:
+    """Создаёт нового пользователя на основе данных Яндекса."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    # Генерируем уникальный логин
+    base_username = username.replace(" ", "_").lower()
+    final_username = base_username
+    counter = 1
+    
+    while True:
+        cursor.execute("SELECT id FROM users WHERE username = ?", (final_username,))
+        if not cursor.fetchone():
+            break
+        final_username = f"{base_username}_{counter}"
+        counter += 1
+    
+    try:
+        cursor.execute(
+            "INSERT INTO users (username, email, yandex_id, password_hash) VALUES (?, ?, ?, '')",
+            (final_username, email, yandex_id)
+        )
+        conn.commit()
+        return True, "✅ Аккаунт создан", cursor.lastrowid
+    except Exception as e:
+        return False, f"❌ Ошибка: {e}", None
+    finally:
+        conn.close()
+
+def link_yandex_to_user(user_id: int, yandex_id: str, yandex_email: str = "") -> Tuple[bool, str]:
+    """Привязывает Яндекс ID к существующему пользователю."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    # Проверяем, не привязан ли этот Яндекс ID к другому пользователю
+    cursor.execute("SELECT id FROM users WHERE yandex_id = ? AND id != ?", (yandex_id, user_id))
+    if cursor.fetchone():
+        conn.close()
+        return False, "❌ Этот Яндекс ID уже привязан к другому аккаунту"
+    
+    try:
+        cursor.execute(
+            "UPDATE users SET yandex_id = ?, email = COALESCE(NULLIF(email, ''), ?) WHERE id = ?",
+            (yandex_id, yandex_email, user_id)
+        )
+        conn.commit()
+        return True, "✅ Яндекс ID успешно привязан"
+    except Exception as e:
+        return False, f"❌ Ошибка: {e}"
+    finally:
+        conn.close()
+
+def update_user_password(user_id: int, new_password: str) -> Tuple[bool, str]:
+    """Обновление пароля пользователя."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        password_hash = hash_password(new_password)
+        cursor.execute(
+            "UPDATE users SET password_hash = ? WHERE id = ?",
+            (password_hash, user_id)
+        )
+        conn.commit()
+        return True, "✅ Пароль успешно изменён"
+    except Exception as e:
+        return False, f"❌ Ошибка: {e}"
+    finally:
+        conn.close()
 
 def get_user_by_email(email: str) -> Optional[dict]:
     """Поиск пользователя по email."""
@@ -147,11 +250,7 @@ def get_user_by_email(email: str) -> Optional[dict]:
     conn.close()
     
     if user:
-        return {
-            "id": user["id"],
-            "username": user["username"],
-            "email": user["email"]
-        }
+        return {"id": user["id"], "username": user["username"], "email": user["email"]}
     return None
 
 def get_user_by_username(username: str) -> Optional[dict]:
@@ -163,34 +262,15 @@ def get_user_by_username(username: str) -> Optional[dict]:
     conn.close()
     
     if user:
-        return {
-            "id": user["id"],
-            "username": user["username"],
-            "email": user["email"]
-        }
+        return {"id": user["id"], "username": user["username"], "email": user["email"]}
     return None
-
-def is_email_registered(email: str) -> bool:
-    """Проверка, зарегистрирован ли email."""
-    if not email:
-        return False
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id FROM users WHERE email = ?", (email,))
-    result = cursor.fetchone()
-    conn.close()
-    return result is not None
 
 def generate_reset_code() -> str:
     """Генерация 6-значного кода."""
     return ''.join(random.choices(string.digits, k=6))
 
 def create_password_reset(email_or_username: str) -> Tuple[bool, str, Optional[str]]:
-    """
-    Создание запроса на сброс пароля.
-    Возвращает (успех, сообщение, email_пользователя).
-    """
-    # Ищем пользователя
+    """Создание запроса на сброс пароля."""
     user = get_user_by_email(email_or_username)
     if not user:
         user = get_user_by_username(email_or_username)
@@ -201,17 +281,13 @@ def create_password_reset(email_or_username: str) -> Tuple[bool, str, Optional[s
     if not user.get("email"):
         return False, "❌ У этого аккаунта не указан email для восстановления", None
     
-    # Генерируем код
     reset_code = generate_reset_code()
     expires_at = datetime.now() + timedelta(minutes=15)
     
     conn = get_connection()
     cursor = conn.cursor()
     
-    # Удаляем старые коды
     cursor.execute("DELETE FROM password_reset WHERE user_id = ?", (user["id"],))
-    
-    # Создаём новый код
     cursor.execute(
         "INSERT INTO password_reset (user_id, reset_code, expires_at) VALUES (?, ?, ?)",
         (user["id"], reset_code, expires_at)
@@ -219,11 +295,8 @@ def create_password_reset(email_or_username: str) -> Tuple[bool, str, Optional[s
     conn.commit()
     conn.close()
     
-    # Отправляем код на email
-    from email_sender import send_reset_code
-    send_reset_code(user["email"], reset_code)
-    
-    return True, f"📧 Код отправлен на {user['email']}", user["email"]
+    return True, f"📧 Код сброса отправлен на {user['email']}", user["email"]
+
 def verify_reset_code(email: str, code: str) -> Tuple[bool, str, Optional[int]]:
     """Проверка кода сброса пароля."""
     user = get_user_by_email(email)
@@ -254,23 +327,165 @@ def reset_password(user_id: int, new_password: str) -> Tuple[bool, str]:
     
     try:
         password_hash = hash_password(new_password)
-        cursor.execute(
-            "UPDATE users SET password_hash = ? WHERE id = ?",
-            (password_hash, user_id)
-        )
-        
-        # Отмечаем код как использованный
-        cursor.execute(
-            "UPDATE password_reset SET used = 1 WHERE user_id = ?",
-            (user_id,)
-        )
-        
+        cursor.execute("UPDATE users SET password_hash = ? WHERE id = ?", (password_hash, user_id))
+        cursor.execute("UPDATE password_reset SET used = 1 WHERE user_id = ?", (user_id,))
         conn.commit()
-        return True, "✅ Пароль успешно изменён!"
+        return True, "✅ Пароль успешно изменён"
+    except Exception as e:
+        return False, f"❌ Ошибка: {e}"
+    finally:
+        conn.close()
+def update_user_email(user_id: int, new_email: str) -> Tuple[bool, str]:
+    """Обновление email пользователя."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT id FROM users WHERE email = ? AND id != ?", (new_email, user_id))
+    if cursor.fetchone():
+        conn.close()
+        return False, "❌ Этот email уже используется"
+    
+    try:
+        cursor.execute("UPDATE users SET email = ? WHERE id = ?", (new_email, user_id))
+        conn.commit()
+        return True, "✅ Email обновлён"
     except Exception as e:
         return False, f"❌ Ошибка: {e}"
     finally:
         conn.close()
 
+def unlink_yandex(user_id: int) -> bool:
+    """Отвязывает Яндекс ID от пользователя."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET yandex_id = NULL WHERE id = ?", (user_id,))
+    conn.commit()
+    conn.close()
+    return True
+
+def delete_user(user_id: int) -> bool:
+    """Удаляет пользователя."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM password_reset WHERE user_id = ?", (user_id,))
+    cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
+    conn.commit()
+    conn.close()
+    return True
+def update_user_email(user_id: int, new_email: str) -> Tuple[bool, str]:
+    """Обновление email пользователя."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT id FROM users WHERE email = ? AND id != ?", (new_email, user_id))
+    if cursor.fetchone():
+        conn.close()
+        return False, "❌ Этот email уже используется"
+    
+    try:
+        cursor.execute("UPDATE users SET email = ? WHERE id = ?", (new_email, user_id))
+        conn.commit()
+        return True, "✅ Email обновлён"
+    except Exception as e:
+        return False, f"❌ Ошибка: {e}"
+    finally:
+        conn.close()
+
+def unlink_yandex(user_id: int) -> bool:
+    """Отвязывает Яндекс ID от пользователя."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET yandex_id = NULL WHERE id = ?", (user_id,))
+    conn.commit()
+    conn.close()
+    return True
+
+def delete_user(user_id: int) -> bool:
+    """Удаляет пользователя."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM password_reset WHERE user_id = ?", (user_id,))
+    cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
+    conn.commit()
+    conn.close()
+    return True
+def add_telegram_column():
+    """Добавляет колонки для Telegram."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("PRAGMA table_info(users)")
+    columns = [col[1] for col in cursor.fetchall()]
+    
+    if 'telegram_chat_id' not in columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN telegram_chat_id TEXT")
+    if 'telegram_verified' not in columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN telegram_verified INTEGER DEFAULT 0")
+    if 'telegram_code' not in columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN telegram_code TEXT")
+    
+    conn.commit()
+    conn.close()
+
+def generate_telegram_code(user_id: int) -> str:
+    """Генерирует код для привязки Telegram."""
+    import random
+    code = ''.join(random.choices('0123456789', k=6))
+    
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET telegram_code = ? WHERE id = ?", (code, user_id))
+    conn.commit()
+    conn.close()
+    
+    return code
+
+def verify_telegram(chat_id: str, code: str) -> Tuple[bool, str]:
+    """Проверяет код и привязывает Telegram."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute(
+        "SELECT id, username FROM users WHERE telegram_code = ?",
+        (code,)
+    )
+    user = cursor.fetchone()
+    
+    if not user:
+        conn.close()
+        return False, "❌ Неверный код"
+    
+    cursor.execute(
+        "UPDATE users SET telegram_chat_id = ?, telegram_verified = 1, telegram_code = NULL WHERE id = ?",
+        (chat_id, user["id"])
+    )
+    conn.commit()
+    conn.close()
+    
+    return True, f"✅ Telegram привязан к аккаунту {user['username']}"
+
+def unlink_telegram(user_id: int) -> bool:
+    """Отвязывает Telegram от пользователя."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE users SET telegram_chat_id = NULL, telegram_verified = 0 WHERE id = ?",
+        (user_id,)
+    )
+    conn.commit()
+    conn.close()
+    return True
+
+def get_telegram_chat_id(user_id: int) -> Optional[str]:
+    """Получает chat_id пользователя."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT telegram_chat_id FROM users WHERE id = ? AND telegram_verified = 1", (user_id,))
+    result = cursor.fetchone()
+    conn.close()
+    return result["telegram_chat_id"] if result else None
+
+# Вызови при инициализации
+add_telegram_column()
 # Инициализация БД
 init_database()

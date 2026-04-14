@@ -21,9 +21,26 @@ class Config:
     # Данные
     SUPPORTED_COINS = {
         "Bitcoin (BTC)": "bitcoin",
-        "Ethereum (ETH)": "ethereum"
+        "Ethereum (ETH)": "ethereum",
+        "Binance Coin (BNB)": "binancecoin",
+        "Solana (SOL)": "solana",
+        "Cardano (ADA)": "cardano",
+        "XRP (XRP)": "ripple",
+        "Dogecoin (DOGE)": "dogecoin",
+        "Polkadot (DOT)": "polkadot",
+        "Avalanche (AVAX)": "avalanche-2",
+        "Chainlink (LINK)": "chainlink",
+        "Litecoin (LTC)": "litecoin",
+        "Bitcoin Cash (BCH)": "bitcoin-cash",
+        "Stellar (XLM)": "stellar",
+        "Monero (XMR)": "monero",
+        "Tron (TRX)": "tron",
+        "Ethereum Classic (ETC)": "ethereum-classic",
+        "Tezos (XTZ)": "tezos",
+        "Cosmos (ATOM)": "cosmos",
+        "Algorand (ALGO)": "algorand",
+        "VeChain (VET)": "vechain",
     }
-    
     # Кэш
     DATA_DIR = BASE_DIR / "data"
     DATA_DIR.mkdir(exist_ok=True)
