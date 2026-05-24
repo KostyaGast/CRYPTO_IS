@@ -17,37 +17,17 @@ class CryptoFetcher:
     Класс для получения и кэширования данных криптовалют через CoinGecko.
     """
     
-    # Разрешённые значения days для /ohlc
-    ALLOWED_DAYS = [1, 7, 14, 30, 90, 180, 365]
-    
     def __init__(self, coin_id: str = "bitcoin", days: int = 30):
         self.coin_id = coin_id
-        # Округляем до ближайшего разрешённого значения
-        self.days = self._round_days(days)
-        self.cache_file = config.DATA_DIR / f"{coin_id}_coingecko_cache.json"
+        self.days = min(days, 365)
+        self.cache_file = config.DATA_DIR / f"{coin_id}_cache.json"
         self.base_url = "https://api.coingecko.com/api/v3"
-    
-    def _round_days(self, days: int) -> int:
-        """Округление до ближайшего разрешённого значения."""
-        if days <= 1:
-            return 1
-        if days <= 7:
-            return 7
-        if days <= 14:
-            return 14
-        if days <= 30:
-            return 30
-        if days <= 90:
-            return 90
-        if days <= 180:
-            return 180
-        return 365
     
     def _fetch_from_api(self) -> List[Dict]:
         """
-        Запрос к CoinGecko API /ohlc.
+        Запрос к CoinGecko API /market_chart (возвращает и цены, и объёмы).
         """
-        url = f"{self.base_url}/coins/{self.coin_id}/ohlc"
+        url = f"{self.base_url}/coins/{self.coin_id}/market_chart"
         params = {
             "vs_currency": "usd",
             "days": self.days
@@ -69,24 +49,37 @@ class CryptoFetcher:
             response.raise_for_status()
             data = response.json()
             
+            # market_chart возвращает: prices, market_caps, total_volumes
+            prices = data.get("prices", [])
+            volumes = data.get("total_volumes", [])
+            
             result = []
-            for item in data:
-                # CoinGecko OHLC: [timestamp, open, high, low, close]
-                ts = item[0]
+            for i, (ts, price) in enumerate(prices):
                 dt = datetime.fromtimestamp(ts / 1000)
                 
                 # ФИЛЬТР: только будние дни (ПН-ПТ)
                 if config.WEEKDAYS_ONLY and dt.weekday() >= 5:
                     continue
                 
+                # Объём
+                volume = 0
+                if i < len(volumes) and len(volumes[i]) > 1:
+                    try:
+                        volume = float(volumes[i][1])
+                    except:
+                        volume = 0
+                
+                # Эмулируем OHLC из цен
+                prev_price = prices[i-1][1] if i > 0 else price
+                
                 result.append({
                     "date": dt.strftime("%Y-%m-%d"),
                     "timestamp": ts,
-                    "open": item[1],
-                    "high": item[2],
-                    "low": item[3],
-                    "close": item[4],
-                    "volume": 0,
+                    "open": prev_price,
+                    "high": price * 1.002,
+                    "low": price * 0.998,
+                    "close": price,
+                    "volume": volume,
                     "market_cap": 0
                 })
             

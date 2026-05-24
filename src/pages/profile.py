@@ -4,6 +4,8 @@
 import streamlit as st
 import json
 import hashlib
+import pandas as pd
+import plotly.graph_objects as go
 from datetime import datetime, timedelta
 from pathlib import Path
 from database import (
@@ -275,7 +277,7 @@ st.markdown("---")
 # ============================================
 tabs = st.tabs([
     t["profile"], t["security"], t["appearance"], 
-    t["sessions"], t["telegram"], t["export"], t["danger"]
+    t["sessions"], t["telegram"], t["export"], t["danger"], "📊 Отчёты"
 ])
 
 # ============================================
@@ -533,7 +535,75 @@ with tabs[6]:
             if st.button(t["cancel"], use_container_width=True):
                 st.session_state["confirm_delete"] = False
                 st.rerun()
-
+# ============================================
+# ВКЛАДКА 7: ОТЧЁТЫ
+# ============================================
+with tabs[7]:
+    st.subheader("📊 Отчёты по историческим данным")
+    
+    from database import get_crypto_history, get_stock_history, get_available_crypto_symbols, get_available_stock_symbols, get_crypto_date_range, get_stock_date_range
+    
+    report_type = st.selectbox("Тип актива", ["Криптовалюта", "Акции"])
+    
+    if report_type == "Криптовалюта":
+        available = get_available_crypto_symbols()
+        if available:
+            # Показываем красивые названия
+            from config import config
+            display_names = {v: k for k, v in config.SUPPORTED_COINS.items()}
+            options = [display_names.get(s, s) for s in available]
+            selected_display = st.selectbox("Выберите криптовалюту", options)
+            coin_id = config.SUPPORTED_COINS.get(selected_display, available[options.index(selected_display)])
+            
+            min_date, max_date, count = get_crypto_date_range(coin_id)
+            if count > 0:
+                st.caption(f"📅 Доступно: {min_date} — {max_date} ({count} записей)")
+        else:
+            st.warning("Нет данных. Загрузите историю через data_loader.py")
+            coin_id = None
+    else:
+        available = get_available_stock_symbols()
+        if available:
+            from stock_fetcher import WORLD_STOCKS
+            display_names = {v: k for k, v in WORLD_STOCKS.items()}
+            options = [display_names.get(s, s) for s in available]
+            selected_display = st.selectbox("Выберите акцию", options)
+            # Извлекаем чистый тикер из строки вида "🌍 Apple (AAPL)"
+            if '(' in selected_display and ')' in selected_display:
+                ticker = selected_display.split('(')[1].split(')')[0]
+            else:
+                ticker = selected_display            
+            min_date, max_date, count = get_stock_date_range(ticker)
+            if count > 0:
+                st.caption(f"📅 Доступно: {min_date} — {max_date} ({count} записей)")
+        else:
+            st.warning("Нет данных. Загрузите историю через data_loader.py")
+            ticker = None
+    
+    months = st.selectbox("Период", [1, 3, 6, 12], format_func=lambda x: f"{x} мес.")
+    
+    if st.button("📊 Сформировать отчёт", use_container_width=True, type="primary"):
+        if report_type == "Криптовалюта" and coin_id:
+            df = get_crypto_history(coin_id, months)
+        elif report_type == "Акции" and ticker:
+            df = get_stock_history(ticker, months)
+        else:
+            df = pd.DataFrame()
+        
+        if not df.empty:
+            st.success(f"✅ Найдено {len(df)} записей")
+            
+            fig = go.Figure()
+            fig.add_trace(go.Candlestick(x=df['date'], open=df['open'], high=df['high'], low=df['low'], close=df['close']))
+            fig.update_layout(template="plotly_dark", height=400, title=f"График за {months} мес.")
+            st.plotly_chart(fig, use_container_width=True)
+            
+            st.dataframe(df, use_container_width=True)
+            
+            csv = df.to_csv(index=False).encode('utf-8-sig')
+            st.download_button(label="📥 Скачать CSV", data=csv, file_name=f"report_{months}months.csv", mime="text/csv")
+        else:
+            st.warning("Нет данных. Загрузите историю через data_loader.py")
 # ============================================
 # НАВИГАЦИЯ
 # ============================================

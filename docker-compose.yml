@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  crypto-is:
+    build: .
+    container_name: crypto_is_app
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data
+      - ./.env:/app/.env
+    restart: unless-stopped
+
+  telegram-bot:
+    build: .
+    container_name: crypto_telegram_bot
+    command: python /app/run_bot.py   # ← полный путь к файлу
+    volumes:
+      - ./data:/app/data
+      - ./.env:/app/.env
+    restart: unless-stopped
+    depends_on:
+      - crypto-is

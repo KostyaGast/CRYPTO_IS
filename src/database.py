@@ -6,9 +6,10 @@ import sqlite3
 import hashlib
 import random
 import string
+import pandas as pd  
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Dict
 
 DB_PATH = Path(__file__).resolve().parent.parent / "data" / "crypto_is.db"
 
@@ -484,7 +485,152 @@ def get_telegram_chat_id(user_id: int) -> Optional[str]:
     result = cursor.fetchone()
     conn.close()
     return result["telegram_chat_id"] if result else None
+def bulk_save_crypto_history(data: List[Dict]):
+    """Массовое сохранение истории криптовалют."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    for item in data:
+        cursor.execute("""
+            INSERT OR IGNORE INTO crypto_history (symbol, date, open, high, low, close, volume)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (item['symbol'], item['date'], item['open'], item['high'], item['low'], item['close'], item['volume']))
+    conn.commit()
+    conn.close()
 
+def bulk_save_stock_history(data: List[Dict]):
+    """Массовое сохранение истории акций."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    for item in data:
+        cursor.execute("""
+            INSERT OR IGNORE INTO stock_history (symbol, date, open, high, low, close, volume)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (item['symbol'], item['date'], item['open'], item['high'], item['low'], item['close'], item['volume']))
+    conn.commit()
+    conn.close()
+
+def get_available_crypto_symbols() -> List[str]:
+    """Возвращает список криптовалют, по которым есть данные."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT DISTINCT symbol FROM crypto_history ORDER BY symbol")
+    result = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    return result
+
+def get_available_stock_symbols() -> List[str]:
+    """Возвращает список акций, по которым есть данные."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT DISTINCT symbol FROM stock_history ORDER BY symbol")
+    result = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    return result
+
+def get_crypto_date_range(symbol: str) -> tuple:
+    """Возвращает диапазон дат для криптовалюты."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT MIN(date), MAX(date), COUNT(*) FROM crypto_history WHERE symbol = ?",
+        (symbol,)
+    )
+    result = cursor.fetchone()
+    conn.close()
+    if result and result[0]:
+        return result[0], result[1], result[2]
+    return None, None, 0
+
+def get_stock_date_range(symbol: str) -> tuple:
+    """Возвращает диапазон дат для акции."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT MIN(date), MAX(date), COUNT(*) FROM stock_history WHERE symbol = ?",
+        (symbol,)
+    )
+    result = cursor.fetchone()
+    conn.close()
+    return result if result else (None, None, 0)
+def init_history_tables():
+    """Создаёт таблицы для хранения истории."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS crypto_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            symbol TEXT NOT NULL,
+            date DATE NOT NULL,
+            open REAL,
+            high REAL,
+            low REAL,
+            close REAL,
+            volume REAL,
+            UNIQUE(symbol, date)
+        )
+    """)
+    
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS stock_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            symbol TEXT NOT NULL,
+            date DATE NOT NULL,
+            open REAL,
+            high REAL,
+            low REAL,
+            close REAL,
+            volume REAL,
+            UNIQUE(symbol, date)
+        )
+    """)
+    
+    conn.commit()
+    conn.close()
+
+def get_crypto_history(symbol: str, months: int = 1) -> pd.DataFrame:
+    """Получает историю криптовалюты за указанное количество месяцев."""
+    import pandas as pd
+    from datetime import datetime, timedelta
+    
+    conn = get_connection()
+    
+    # Берём ВСЕ данные по символу
+    query = "SELECT * FROM crypto_history WHERE symbol = ? ORDER BY date ASC"
+    df = pd.read_sql_query(query, conn, params=(symbol,))
+    conn.close()
+    
+    if df.empty:
+        return pd.DataFrame()
+    
+    # Фильтруем по дате
+    df['date'] = pd.to_datetime(df['date'])
+    cutoff = datetime.now() - timedelta(days=months * 30)
+    df = df[df['date'] >= cutoff]
+    
+    return df
+
+def get_stock_history(symbol: str, months: int = 1) -> pd.DataFrame:
+    """Получает историю акции за указанное количество месяцев."""
+    import pandas as pd
+    from datetime import datetime, timedelta
+    
+    conn = get_connection()
+    query = "SELECT * FROM stock_history WHERE symbol = ? ORDER BY date ASC"
+    df = pd.read_sql_query(query, conn, params=(symbol,))
+    conn.close()
+    
+    if df.empty:
+        return pd.DataFrame()
+    
+    df['date'] = pd.to_datetime(df['date'])
+    cutoff = datetime.now() - timedelta(days=months * 30)
+    df = df[df['date'] >= cutoff]
+    
+    return df
+
+# Инициализация таблиц истории
+init_history_tables()
 # Вызови при инициализации
 add_telegram_column()
 # Инициализация БД

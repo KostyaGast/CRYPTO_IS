@@ -479,8 +479,23 @@ with st.sidebar:
         title = f"{stock_display}"
         coin_id = None
     
-    days_options = [1, 7, 14, 30]
-    days = st.selectbox(t["depth"], options=days_options, index=2)
+    # Выбор периода
+    period_option = st.selectbox(
+        "📅 Период",
+        ["1 день", "7 дней", "14 дней", "30 дней", "Своя дата"]
+    )
+
+    if period_option == "Своя дата":
+        col1, col2 = st.columns(2)
+        with col1:
+            start_date = st.date_input("С", value=datetime.now() - timedelta(days=30))
+        with col2:
+            end_date = st.date_input("По", value=datetime.now())
+        days = (end_date - start_date).days
+        if days < 1:
+            days = 1
+    else:
+        days = int(period_option.split()[0])
     
     refresh = st.button(t["refresh"], use_container_width=True)
     
@@ -594,16 +609,18 @@ col5.metric(t["trading_days"], len(df))
 st.markdown("---")
 
 # ============================================
-# ГРАФИКИ
+# ГРАФИКИ (Pro)
 # ============================================
-tab1, tab2, tab3 = st.tabs([t["candlestick"], t["performance"], t["table"]])
+from pro_charts import create_pro_chart, create_order_book
+
+tab1, tab2, tab3, tab4 = st.tabs(["📈 Pro-график", "📉 Доходность", "📋 Таблица", "📊 Стакан"])
 
 with tab1:
-    fig = create_candlestick_chart(df, f"{symbol} — {t['candlestick']}", color)
-    st.plotly_chart(fig, use_container_width=True, key="tab1_chart")
+    fig = create_pro_chart(df, f"{symbol} — Pro-график", color)
+    st.plotly_chart(fig, use_container_width=True, key="pro_chart")
 
 with tab2:
-    fig = create_performance_chart(df, f"{symbol} — {t['performance']}")
+    fig = create_performance_chart(df, f"{symbol} — Доходность")
     st.plotly_chart(fig, use_container_width=True, key="tab2_chart")
 
 with tab3:
@@ -626,8 +643,11 @@ with tab3:
         use_container_width=True
     )
 
-st.markdown('</div>', unsafe_allow_html=True)
-
+with tab4:
+    st.markdown("### 📊 Стакан (Order Book)")
+    st.caption("🟢 Слева — покупка (Bid) | 🔴 Справа — продажа (Ask)")
+    fig = create_order_book(df, f"{symbol} — Стакан", color)
+    st.plotly_chart(fig, use_container_width=True, key="order_book")
 # ============================================
 # ПОДВАЛ
 # ============================================
