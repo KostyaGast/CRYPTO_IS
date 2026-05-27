@@ -19,6 +19,19 @@ from plotter import (
 )
 from database import register_user, login_user
 
+# ============================================
+# GOOGLE OAUTH
+# ============================================
+import os
+
+# Если есть secrets.toml — используем его, иначе локальный режим
+if os.path.exists('.streamlit/secrets.toml'):
+    # Серверный режим с Google OAuth
+    USE_GOOGLE_AUTH = True
+else:
+    # Локальный режим без Google
+    USE_GOOGLE_AUTH = False
+
 # Менеджер для работы с cookies
 cookie_manager = stx.CookieManager()
 
@@ -124,6 +137,62 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Проверка Google OAuth
+if USE_GOOGLE_AUTH and hasattr(st, 'experimental_user') and st.experimental_user.is_logged_in:
+    user_info = st.experimental_user
+    google_email = user_info.get("email", "")
+    google_name = user_info.get("name", "Google User")
+    google_picture = user_info.get("picture", "")
+    
+    # Проверяем, не вошли ли мы уже под другим пользователем
+    current_email = st.session_state.get("user", {}).get("email", "")
+    
+    if current_email == google_email and st.session_state.get("authenticated"):
+        # Уже вошли под этим Google-аккаунтом — ничего не делаем
+        pass
+    else:
+        # Новый вход — ищем или создаём пользователя
+        from database import get_user_by_email, get_connection
+        
+        existing_user = get_user_by_email(google_email)
+        
+        if existing_user:
+            st.session_state["authenticated"] = True
+            st.session_state["auth_method"] = "google"
+            st.session_state["user"] = existing_user
+        else:
+            base_username = google_email.split("@")[0].replace(".", "_")
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            final_username = base_username
+            counter = 1
+            while True:
+                cursor.execute("SELECT id FROM users WHERE username = ?", (final_username,))
+                if not cursor.fetchone():
+                    break
+                final_username = f"{base_username}_{counter}"
+                counter += 1
+            
+            cursor.execute(
+                "INSERT INTO users (username, email, password_hash) VALUES (?, ?, '')",
+                (final_username, google_email)
+            )
+            conn.commit()
+            user_id = cursor.lastrowid
+            conn.close()
+            
+            st.session_state["authenticated"] = True
+            st.session_state["auth_method"] = "google"
+            st.session_state["user"] = {
+                "id": user_id,
+                "username": final_username,
+                "email": google_email,
+                "picture": google_picture
+            }
+        
+        st.rerun()
 # Анимация загрузки страницы
 st.markdown('<div class="fade-in">', unsafe_allow_html=True)
 
@@ -257,6 +326,11 @@ def logout():
     st.session_state["authenticated"] = False
     st.session_state["user"] = None
     st.session_state["auth_method"] = None
+    
+    # Очистка Google OAuth сессии
+    if hasattr(st, 'logout'):
+        st.logout()
+    
     try:
         cookie_manager.delete("crypto_is_user")
         cookie_manager.delete("crypto_is_auth_method")
@@ -269,6 +343,10 @@ def logout():
 # ЭКРАН АУТЕНТИФИКАЦИИ
 # ============================================
 def auth_screen():
+    # Если уже авторизован — не показываем форму
+    if st.session_state.get("authenticated", False):
+        return
+    
     st.markdown(f"""
     <div style="text-align: center; padding: 30px 0 10px 0;">
         <h1 style="background: linear-gradient(135deg, #F7931A, #627EEA); 
@@ -283,8 +361,12 @@ def auth_screen():
     </div>
     """, unsafe_allow_html=True)
     
-    tab1, tab2 = st.tabs([t["login_email"], t["register"]])
-    
+    if USE_GOOGLE_AUTH:
+        tab1, tab2, tab3 = st.tabs([t["login_email"], "🚀 Google", t["register"]])
+    else:
+        tab1, tab2 = st.tabs([t["login_email"], t["register"]])
+
+    # ===== ВКЛАДКА 1: Email/Пароль =====
     with tab1:
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
@@ -305,7 +387,6 @@ def auth_screen():
                             st.session_state["user"] = user_data
                             st.session_state["auth_method"] = "sqlite"
                             
-                            # Отправляем уведомление в Telegram
                             try:
                                 from telegram_bot import send_login_notification
                                 send_login_notification(user_data["id"], user_data["username"], "***.***.***.***")
@@ -334,8 +415,24 @@ def auth_screen():
                 if st.button(t["forgot"], use_container_width=True):
                     st.session_state["show_reset"] = True
                     st.rerun()
-    
-    with tab2:
+
+    # ===== ВКЛАДКА 2: Google (только если USE_GOOGLE_AUTH) =====
+    if USE_GOOGLE_AUTH:
+        with tab2:
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                st.markdown("### Вход через Google")
+                st.markdown("""
+                <div style="text-align: center; padding: 20px;">
+                    <p>Используйте ваш Google аккаунт для быстрого входа</p>
+                </div>
+                """, unsafe_allow_html=True)
+                if st.button("🚀 Войти через Google", use_container_width=True, type="primary"):
+                    st.login("google")
+
+    # ===== ВКЛАДКА 3 (или 2): Регистрация =====
+    reg_tab = tab3 if USE_GOOGLE_AUTH else tab2
+    with reg_tab:
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
             st.markdown("### " + t["register"])
@@ -570,10 +667,19 @@ st.markdown(f'<h1 class="main-header">{title}</h1>', unsafe_allow_html=True)
 
 # Загрузка данных
 if asset_type == t["crypto"]:
-    fetcher = CryptoFetcher(coin_id=coin_id, days=days)
+    # Округление days до поддерживаемых CoinGecko значений
+    allowed = [1, 7, 14, 30, 90, 180, 365]
+    closest = min(allowed, key=lambda x: abs(x - days))
+    if days > closest and closest < 365:
+        closest = next((v for v in allowed if v >= days), 365)
+    fetcher = CryptoFetcher(coin_id=coin_id, days=closest)
 else:
-    period_map = {1: "1d", 7: "5d", 14: "1mo", 30: "1mo"}
-    period = period_map.get(days, "1mo")
+    # Для произвольных дат используем всегда 1 месяц, потом отфильтруем
+    if period_option == "Своя дата":
+        period = "3mo" if days > 60 else "1mo"
+    else:
+        period_map = {1: "1d", 7: "5d", 14: "1mo", 30: "1mo"}
+        period = period_map.get(days, "1mo")
     fetcher = StockFetcher(symbol=symbol, period=period)
 
 with st.spinner(t["loading"]):
@@ -581,6 +687,12 @@ with st.spinner(t["loading"]):
         df = fetcher.get_data(force_refresh=refresh)
     else:
         df = fetcher.get_data()
+# Фильтрация по выбранным датам
+if period_option == "Своя дата" and not df.empty:
+    df['date'] = pd.to_datetime(df['date'])
+    start = pd.to_datetime(start_date)
+    end = pd.to_datetime(end_date) + pd.Timedelta(days=1)
+    df = df[(df['date'] >= start) & (df['date'] < end)]
 
 if df.empty:
     st.error(t["error_load"])
