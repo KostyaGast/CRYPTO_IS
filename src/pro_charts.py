@@ -114,14 +114,21 @@ def create_pro_chart(
     if show_rsi and rows >= 3:
         rsi = calculate_rsi(df["close"], period=14)
         rsi_row = 3
-        
+        # Осмысленная подсказка
+        hover_rsi = [
+            f"RSI: {v:.1f}<br>" +
+            ("🔴 Перекупленность" if v > 70 else ("🟢 Перепроданность" if v < 30 else "⚖️ Нейтрально"))
+            for v in rsi
+        ]
         fig.add_trace(
             go.Scatter(
                 x=df["date"],
                 y=rsi,
                 mode="lines",
-                name="RSI",
+                name="RSI (14)",
                 line=dict(color="#00aaff", width=1.5),
+                hovertext=hover_rsi,
+                hoverinfo="text",
                 showlegend=False
             ),
             row=rsi_row, col=1
@@ -138,9 +145,16 @@ def create_pro_chart(
     if show_macd and rows >= 4:
         macd_line, signal_line, histogram = calculate_macd(df["close"])
         macd_row = 4
-        
-        # Гистограмма
+
+        # Цвета столбцов гистограммы
         colors_hist = ['#00ff88' if val >= 0 else '#ff4444' for val in histogram]
+
+        # Гистограмма с подсказкой
+        hover_hist = [
+            f"MACD: {h:.4f}<br>" +
+            ("📈 Бычий сигнал" if h > 0 else "📉 Медвежий сигнал")
+            for h in histogram
+        ]
         fig.add_trace(
             go.Bar(
                 x=df["date"],
@@ -148,12 +162,14 @@ def create_pro_chart(
                 name="Гистограмма",
                 marker_color=colors_hist,
                 opacity=0.5,
+                hovertext=hover_hist,
+                hoverinfo="text",
                 showlegend=False
             ),
             row=macd_row, col=1
         )
-        
-        # Линия MACD
+
+        # Линия MACD с подсказкой
         fig.add_trace(
             go.Scatter(
                 x=df["date"],
@@ -161,12 +177,14 @@ def create_pro_chart(
                 mode="lines",
                 name="MACD",
                 line=dict(color="#00aaff", width=1.5),
+                hovertext=[f"MACD: {v:.4f}" for v in macd_line],
+                hoverinfo="text",
                 showlegend=False
             ),
             row=macd_row, col=1
         )
-        
-        # Сигнальная линия
+
+        # Сигнальная линия с подсказкой
         fig.add_trace(
             go.Scatter(
                 x=df["date"],
@@ -174,11 +192,13 @@ def create_pro_chart(
                 mode="lines",
                 name="Signal",
                 line=dict(color="#ffaa00", width=1),
+                hovertext=[f"Signal: {v:.4f}" for v in signal_line],
+                hoverinfo="text",
                 showlegend=False
             ),
             row=macd_row, col=1
         )
-        
+
         fig.add_hline(y=0, line_dash="solid", line_color="#888888", opacity=0.3, row=macd_row, col=1)
         fig.update_yaxes(title_text="MACD", row=macd_row, col=1)
     

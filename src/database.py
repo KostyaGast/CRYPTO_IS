@@ -415,6 +415,12 @@ def add_telegram_column():
     conn = get_connection()
     cursor = conn.cursor()
     
+ # Проверяем, существует ли таблица users
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
+    if not cursor.fetchone():
+        conn.close()
+        return  # Таблицы нет — выходим
+
     cursor.execute("PRAGMA table_info(users)")
     columns = [col[1] for col in cursor.fetchall()]
     
@@ -632,6 +638,6 @@ def get_stock_history(symbol: str, months: int = 1) -> pd.DataFrame:
 # Инициализация таблиц истории
 init_history_tables()
 # Вызови при инициализации
-add_telegram_column()
+# add_telegram_column()
 # Инициализация БД
 init_database()

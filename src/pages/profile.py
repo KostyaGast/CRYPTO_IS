@@ -6,6 +6,7 @@ import json
 import hashlib
 import pandas as pd
 import plotly.graph_objects as go
+import requests
 from datetime import datetime, timedelta
 from pathlib import Path
 from database import (
@@ -28,6 +29,44 @@ if not st.session_state.get("authenticated", False):
     st.stop()
 
 user = st.session_state["user"]
+
+# Глобальный кэш курсов
+_cached_rates = None
+_cache_time = None
+
+def get_live_rates():
+    global _cached_rates, _cache_time
+    if _cached_rates and _cache_time and (datetime.now() - _cache_time) < timedelta(hours=1):
+        return _cached_rates
+
+    try:
+        resp = requests.get("https://api.frankfurter.app/latest?from=USD", timeout=5)
+        data = resp.json()
+        _cached_rates = {
+            "USD": 1.0,
+            "EUR": data["rates"]["EUR"],
+            "RUB": data["rates"]["RUB"],
+            "GBP": data["rates"]["GBP"],
+            "JPY": data["rates"]["JPY"],
+            "CNY": data["rates"]["CNY"]
+        }
+        _cache_time = datetime.now()
+        return _cached_rates
+    except:
+        # fallback к статическим курсам
+        return {
+            "USD": 1, "EUR": 0.92, "RUB": 92, "GBP": 0.79, "JPY": 150, "CNY": 7.2
+        }
+def convert_price(price_usd, currency="USD"):
+    """Конвертирует цену из USD в выбранную валюту по живому курсу."""
+    if price_usd is None:
+        return 0
+    rates = get_live_rates()
+    if not isinstance(rates, dict):
+        return price_usd
+    rate = rates.get(currency, 1)
+    return price_usd * rate
+    
 
 # ============================================
 # ЗАГРУЗКА НАСТРОЕК ПОЛЬЗОВАТЕЛЯ
@@ -104,6 +143,7 @@ translations = {
         "sessions": "📱 Сессии",
         "export": "📤 Экспорт",
         "danger": "⚠️ Опасная зона",
+        "reports": "📊 Отчёты",
         "main_info": "Основная информация",
         "username": "Имя пользователя",
         "email": "Email",
@@ -183,6 +223,7 @@ translations = {
         "sessions": "📱 Sessions",
         "export": "📤 Export",
         "danger": "⚠️ Danger Zone",
+        "reports": "📊 Reports",
         "main_info": "Main Information",
         "username": "Username",
         "email": "Email",
@@ -273,11 +314,11 @@ with col3:
 st.markdown("---")
 
 # ============================================
-# ВКЛАДКИ
+# ВКЛАДКИ (Отчёты перед Сессиями)
 # ============================================
 tabs = st.tabs([
     t["profile"], t["security"], t["appearance"], 
-    t["sessions"], t["telegram"], t["export"], t["danger"], "📊 Отчёты"
+    t["reports"], t["sessions"], t["telegram"], t["export"], t["danger"]
 ])
 
 # ============================================
@@ -314,35 +355,36 @@ with tabs[0]:
 with tabs[1]:
     col1, col2 = st.columns(2)
     
-with col1:
-    st.subheader(t["change_password"])
-    
-    if st.session_state.get("auth_method") == "sqlite":
-        with st.form("change_password_form"):
-            current_password = st.text_input(t["current_password"], type="password")
-            new_password = st.text_input(t["new_password"], type="password")
-            confirm_password = st.text_input(t["confirm_password"], type="password")
-            
-            if st.form_submit_button(t["change_password"], use_container_width=True):
-                if not current_password or not new_password or not confirm_password:
-                    st.error(t["fill_fields"])
-                elif len(new_password) < 6:
-                    st.error(t["password_min"])
-                elif new_password != confirm_password:
-                    st.error(t["passwords_match"])
-                else:
-                    from database import login_user
-                    success, msg, _ = login_user(user["username"], current_password)
-                    if not success:
-                        st.error(t["wrong_password"])
+    with col1:
+        st.subheader(t["change_password"])
+        
+        if st.session_state.get("auth_method") == "sqlite":
+            with st.form("change_password_form"):
+                current_password = st.text_input(t["current_password"], type="password")
+                new_password = st.text_input(t["new_password"], type="password")
+                confirm_password = st.text_input(t["confirm_password"], type="password")
+                
+                if st.form_submit_button(t["change_password"], use_container_width=True):
+                    if not current_password or not new_password or not confirm_password:
+                        st.error(t["fill_fields"])
+                    elif len(new_password) < 6:
+                        st.error(t["password_min"])
+                    elif new_password != confirm_password:
+                        st.error(t["passwords_match"])
                     else:
-                        success, msg = update_user_password(user["id"], new_password)
-                        if success:
-                            st.success(t["password_changed"])
+                        from database import login_user
+                        success, msg, _ = login_user(user["username"], current_password)
+                        if not success:
+                            st.error(t["wrong_password"])
                         else:
-                            st.error(f"{t['error']}: {msg}")
-    else:
-        st.info("🔑 Вы вошли через OAuth. Смена пароля недоступна.")
+                            success, msg = update_user_password(user["id"], new_password)
+                            if success:
+                                st.success(t["password_changed"])
+                            else:
+                                st.error(f"{t['error']}: {msg}")
+        else:
+            st.info("🔑 Вы вошли через OAuth. Смена пароля недоступна.")
+    
     with col2:
         st.subheader(t["change_email"])
         
@@ -408,10 +450,179 @@ with tabs[2]:
         save_settings(settings)
         st.success(t["save_success"])
         st.rerun()
+
 # ============================================
-# ВКЛАДКА 3: СЕССИИ (ИСТОРИЯ ВХОДОВ)
+# ВКЛАДКА 3: ОТЧЁТЫ
 # ============================================
 with tabs[3]:
+    st.subheader("📊 Отчёты по историческим данным")
+
+    from database import get_crypto_history, get_stock_history, get_available_crypto_symbols, get_available_stock_symbols, get_crypto_date_range, get_stock_date_range
+
+    report_type = st.selectbox("Тип актива", ["Криптовалюта", "Акции"])
+
+    if report_type == "Криптовалюта":
+        available = get_available_crypto_symbols()
+        if available:
+            from config import config
+            display_names = {v: k for k, v in config.SUPPORTED_COINS.items()}
+            options = [display_names.get(s, s) for s in available]
+            selected_display = st.selectbox("Выберите криптовалюту", options)
+            coin_id = config.SUPPORTED_COINS.get(selected_display, available[options.index(selected_display)])
+
+            min_date, max_date, count = get_crypto_date_range(coin_id)
+            if count > 0:
+                st.caption(f"📅 Доступно: {min_date} — {max_date} ({count} записей)")
+        else:
+            st.warning("Нет данных. Загрузите историю через data_loader.py")
+            coin_id = None
+    else:
+        available = get_available_stock_symbols()
+        if available:
+            from stock_fetcher import WORLD_STOCKS
+            display_names = {v: k for k, v in WORLD_STOCKS.items()}
+            options = [display_names.get(s, s) for s in available]
+            selected_display = st.selectbox("Выберите акцию", options)
+            if '(' in selected_display and ')' in selected_display:
+                ticker = selected_display.split('(')[1].split(')')[0]
+            else:
+                ticker = selected_display
+            min_date, max_date, count = get_stock_date_range(ticker)
+            if count > 0:
+                st.caption(f"📅 Доступно: {min_date} — {max_date} ({count} записей)")
+        else:
+            st.warning("Нет данных. Загрузите историю через data_loader.py")
+            ticker = None
+
+    months = st.selectbox("Период", [1, 3, 6, 12], format_func=lambda x: f"{x} мес.")
+
+    # ---- Выбор валюты для отчёта ----
+    rates = get_live_rates()
+    currencies = list(rates.keys())
+    default_currency = settings.get("currency", "USD")
+    if default_currency not in currencies:
+        default_currency = "USD"
+    report_currency = st.selectbox(
+        "Валюта отчёта",
+        options=currencies,
+        index=currencies.index(default_currency)
+    )
+
+    if st.button("📊 Сформировать отчёт", use_container_width=True, type="primary"):
+        with st.spinner("🔄 Формирование отчёта..."):
+            if report_type == "Криптовалюта" and coin_id:
+                df = get_crypto_history(coin_id, months)
+                symbol_name = coin_id
+            elif report_type == "Акции" and ticker:
+                df = get_stock_history(ticker, months)
+                symbol_name = ticker
+            else:
+                df = pd.DataFrame()
+                symbol_name = "report"
+
+            if not df.empty:
+                # Получаем курс один раз
+                rate = rates.get(report_currency, 1)
+
+                # Быстрая конвертация всех ценовых колонок
+                price_cols = ["open", "high", "low", "close"]
+                for col in price_cols:
+                    if col in df.columns:
+                        df[col] = df[col] * rate
+
+                st.success(f"✅ Найдено {len(df)} записей")
+
+                # === Переводим дату в русский формат с днём недели ===
+                day_names = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+                df["Дата (день)"] = pd.to_datetime(df["date"]).apply(
+                    lambda d: f"{d.strftime('%d.%m.%Y')} ({day_names[d.weekday()]})"
+                )
+
+                # Переименовываем остальные колонки
+                rename_map = {
+                    "open": "Открытие",
+                    "high": "Максимум",
+                    "low": "Минимум",
+                    "close": "Закрытие",
+                    "volume": "Объём",
+                    "symbol": "Тикер",
+                    "id": "ID"
+                }
+                df_display = df.rename(columns=rename_map)
+                if "date" in df_display.columns:
+                    df_display = df_display.drop(columns=["date"])
+                cols = ["Дата (день)"] + [c for c in df_display.columns if c != "Дата (день)"]
+                df_display = df_display[cols]
+
+                # График с учётом валюты
+                fig = go.Figure()
+                fig.add_trace(go.Candlestick(
+                    x=df['date'],
+                    open=df['open'],
+                    high=df['high'],
+                    low=df['low'],
+                    close=df['close'],
+                    name=symbol_name,
+                    hovertext=[
+                        f"Дата: {d.strftime('%d.%m.%Y')} ({day_names[d.weekday()]})<br>"
+                        f"Откр: {o:.2f}<br>Макс: {h:.2f}<br>Мин: {l:.2f}<br>Закр: {c:.2f}"
+                        for d, o, h, l, c in zip(df['date'], df['open'], df['high'], df['low'], df['close'])
+                    ],
+                    hoverinfo="text"
+                ))
+                fig.update_layout(
+                    template="plotly_dark",
+                    height=400,
+                    title=f"График за {months} мес. ({report_currency})",
+                    yaxis_title=f"Цена ({report_currency})",
+                    hovermode="x unified"
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+                # Таблица
+                st.dataframe(df_display, use_container_width=True)
+
+                # --- Экспорт в Excel (xlsx) ---
+                import io
+                buffer = io.BytesIO()
+                with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                    df_display.to_excel(writer, sheet_name='Отчёт', index=False)
+                    worksheet = writer.sheets['Отчёт']
+                    for column in worksheet.columns:
+                        max_length = 0
+                        column_letter = column[0].column_letter
+                        for cell in column:
+                            try:
+                                if len(str(cell.value)) > max_length:
+                                    max_length = len(str(cell.value))
+                            except:
+                                pass
+                        adjusted_width = min(max_length + 2, 50)
+                        worksheet.column_dimensions[column_letter].width = adjusted_width
+                buffer.seek(0)
+                st.download_button(
+                    label="📥 Скачать Excel",
+                    data=buffer,
+                    file_name=f"report_{symbol_name}_{months}months_{report_currency}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
+
+                # --- CSV ---
+                csv = df_display.to_csv(index=False, sep=';', encoding='utf-8-sig')
+                st.download_button(
+                    label="📥 Скачать CSV (для Excel)",
+                    data=csv,
+                    file_name=f"report_{symbol_name}_{months}months.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+            else:
+                st.warning("Нет данных. Загрузите историю через data_loader.py")
+# ============================================
+# ВКЛАДКА 4: СЕССИИ (ИСТОРИЯ ВХОДОВ)
+# ============================================
+with tabs[4]:
     st.subheader(t["session_history"])
     
     if logins:
@@ -427,9 +638,9 @@ with tabs[3]:
         st.info(t["no_sessions"])
 
 # ============================================
-# ВКЛАДКА 4: TELEGRAM
+# ВКЛАДКА 5: TELEGRAM
 # ============================================
-with tabs[4]:
+with tabs[5]:
     st.subheader("📱 Telegram")
     
     from database import get_connection, generate_telegram_code, unlink_telegram
@@ -449,7 +660,6 @@ with tabs[4]:
     else:
         st.info("🔗 Привяжите Telegram для получения уведомлений о входах и алертах.")
         
-        # Генерируем или показываем существующий код
         if not tg_data or not tg_data["telegram_code"]:
             code = generate_telegram_code(user["id"])
         else:
@@ -472,14 +682,12 @@ with tabs[4]:
             code = generate_telegram_code(user["id"])
             st.rerun()
         
-        # Кнопка открытия бота
         st.link_button("🚀 Открыть бота в Telegram", "https://t.me/crypto_is_notify_bot", use_container_width=True)
 
-
 # ============================================
-# ВКЛАДКА 5: ЭКСПОРТ ДАННЫХ
+# ВКЛАДКА 6: ЭКСПОРТ ДАННЫХ
 # ============================================
-with tabs[5]:
+with tabs[6]:
     st.subheader(t["export_data"])
     
     if st.button(t["export_data"], use_container_width=True):
@@ -504,10 +712,11 @@ with tabs[5]:
             mime="application/json",
             use_container_width=True
         )
+
 # ============================================
-# ВКЛАДКА 6: ОПАСНАЯ ЗОНА (УДАЛЕНИЕ АККАУНТА)
+# ВКЛАДКА 7: ОПАСНАЯ ЗОНА (УДАЛЕНИЕ АККАУНТА)
 # ============================================
-with tabs[6]:
+with tabs[7]:
     st.subheader(t["delete_account"])
     st.error(t["delete_warning"])
     
@@ -535,75 +744,7 @@ with tabs[6]:
             if st.button(t["cancel"], use_container_width=True):
                 st.session_state["confirm_delete"] = False
                 st.rerun()
-# ============================================
-# ВКЛАДКА 7: ОТЧЁТЫ
-# ============================================
-with tabs[7]:
-    st.subheader("📊 Отчёты по историческим данным")
-    
-    from database import get_crypto_history, get_stock_history, get_available_crypto_symbols, get_available_stock_symbols, get_crypto_date_range, get_stock_date_range
-    
-    report_type = st.selectbox("Тип актива", ["Криптовалюта", "Акции"])
-    
-    if report_type == "Криптовалюта":
-        available = get_available_crypto_symbols()
-        if available:
-            # Показываем красивые названия
-            from config import config
-            display_names = {v: k for k, v in config.SUPPORTED_COINS.items()}
-            options = [display_names.get(s, s) for s in available]
-            selected_display = st.selectbox("Выберите криптовалюту", options)
-            coin_id = config.SUPPORTED_COINS.get(selected_display, available[options.index(selected_display)])
-            
-            min_date, max_date, count = get_crypto_date_range(coin_id)
-            if count > 0:
-                st.caption(f"📅 Доступно: {min_date} — {max_date} ({count} записей)")
-        else:
-            st.warning("Нет данных. Загрузите историю через data_loader.py")
-            coin_id = None
-    else:
-        available = get_available_stock_symbols()
-        if available:
-            from stock_fetcher import WORLD_STOCKS
-            display_names = {v: k for k, v in WORLD_STOCKS.items()}
-            options = [display_names.get(s, s) for s in available]
-            selected_display = st.selectbox("Выберите акцию", options)
-            # Извлекаем чистый тикер из строки вида "🌍 Apple (AAPL)"
-            if '(' in selected_display and ')' in selected_display:
-                ticker = selected_display.split('(')[1].split(')')[0]
-            else:
-                ticker = selected_display            
-            min_date, max_date, count = get_stock_date_range(ticker)
-            if count > 0:
-                st.caption(f"📅 Доступно: {min_date} — {max_date} ({count} записей)")
-        else:
-            st.warning("Нет данных. Загрузите историю через data_loader.py")
-            ticker = None
-    
-    months = st.selectbox("Период", [1, 3, 6, 12], format_func=lambda x: f"{x} мес.")
-    
-    if st.button("📊 Сформировать отчёт", use_container_width=True, type="primary"):
-        if report_type == "Криптовалюта" and coin_id:
-            df = get_crypto_history(coin_id, months)
-        elif report_type == "Акции" and ticker:
-            df = get_stock_history(ticker, months)
-        else:
-            df = pd.DataFrame()
-        
-        if not df.empty:
-            st.success(f"✅ Найдено {len(df)} записей")
-            
-            fig = go.Figure()
-            fig.add_trace(go.Candlestick(x=df['date'], open=df['open'], high=df['high'], low=df['low'], close=df['close']))
-            fig.update_layout(template="plotly_dark", height=400, title=f"График за {months} мес.")
-            st.plotly_chart(fig, use_container_width=True)
-            
-            st.dataframe(df, use_container_width=True)
-            
-            csv = df.to_csv(index=False).encode('utf-8-sig')
-            st.download_button(label="📥 Скачать CSV", data=csv, file_name=f"report_{months}months.csv", mime="text/csv")
-        else:
-            st.warning("Нет данных. Загрузите историю через data_loader.py")
+
 # ============================================
 # НАВИГАЦИЯ
 # ============================================

@@ -245,49 +245,6 @@ def get_stock_info(symbol: str):
         return None
 
 # ============================================
-# АЛЕРТЫ
-# ============================================
-
-def save_alert(user_id: int, symbol: str, condition: str, price: float):
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS price_alerts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            symbol TEXT NOT NULL,
-            condition TEXT NOT NULL,
-            price REAL NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            active INTEGER DEFAULT 1
-        )
-    """)
-    cursor.execute(
-        "INSERT INTO price_alerts (user_id, symbol, condition, price) VALUES (?, ?, ?, ?)",
-        (user_id, symbol.upper(), condition, price)
-    )
-    conn.commit()
-    conn.close()
-
-def get_user_alerts(user_id: int):
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT id, symbol, condition, price FROM price_alerts WHERE user_id = ? AND active = 1 ORDER BY created_at DESC",
-        (user_id,)
-    )
-    alerts = cursor.fetchall()
-    conn.close()
-    return alerts
-
-def delete_alert(alert_id: int, user_id: int):
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE price_alerts SET active = 0 WHERE id = ? AND user_id = ?", (alert_id, user_id))
-    conn.commit()
-    conn.close()
-
-# ============================================
 # ОБРАБОТЧИК КОМАНД (С ПРОВЕРКОЙ ПРИВЯЗКИ)
 # ============================================
 
@@ -306,7 +263,6 @@ def process_telegram_update(update: dict):
     # ===== ПРОВЕРКА ПРИВЯЗКИ (кроме кода и /start) =====
     is_six_digit_code = len(text) == 6 and text.isdigit()
     
-    # Для непривязанных пользователей доступны только /start, /help и код
     if not is_six_digit_code and command not in ["/start", "/help"]:
         if not require_auth(chat_id):
             return
@@ -332,11 +288,6 @@ def process_telegram_update(update: dict):
 /news — последние новости
 /fear — индекс страха и жадности
 /help — все команды
-
-<b>🔔 Алерты:</b>
-/alert BTC выше 100000 — установить
-/myalerts — мои алерты
-/delalert N — удалить
 
 <b>👤 Аккаунт:</b>
 /status — статус привязки
@@ -376,11 +327,6 @@ def process_telegram_update(update: dict):
 
 <b>📰 Новости:</b>
 /news — последние новости
-
-<b>🔔 Алерты:</b>
-/alert BTC выше 100000 — установить
-/myalerts — мои алерты
-/delalert N — удалить
 
 <b>👤 Аккаунт:</b>
 /status — статус привязки
@@ -536,57 +482,6 @@ def process_telegram_update(update: dict):
         if page < total:
             lines.append(f"\n📄 {page}/{total} | /stocks_full {page + 1}")
         send_telegram_message(chat_id, "\n".join(lines))
-
-    elif command == "/alert":
-        user = get_user_by_chat_id(chat_id)
-        if not user:
-            send_telegram_message(chat_id, "❌ Сначала привяжите аккаунт.")
-            return
-        if len(parts) < 4:
-            send_telegram_message(chat_id, "❌ Формат: /alert BTC выше 100000")
-            return
-        symbol = parts[1].upper()
-        condition = parts[2].lower()
-        if condition not in ["выше", "ниже", "above", "below"]:
-            send_telegram_message(chat_id, "❌ Условие: выше/ниже")
-            return
-        try:
-            price = float(parts[3])
-        except:
-            send_telegram_message(chat_id, "❌ Цена должна быть числом")
-            return
-        cond_en = "above" if condition in ["выше", "above"] else "below"
-        save_alert(user["id"], symbol, cond_en, price)
-        send_telegram_message(chat_id, f"✅ Алерт: {symbol} {condition} ${price:,.2f}")
-
-    elif command == "/myalerts":
-        user = get_user_by_chat_id(chat_id)
-        if not user:
-            send_telegram_message(chat_id, "❌ Сначала привяжите аккаунт.")
-            return
-        alerts = get_user_alerts(user["id"])
-        if alerts:
-            lines = ["🔔 <b>Ваши алерты</b>\n"]
-            for a in alerts:
-                cond = "выше" if a["condition"] == "above" else "ниже"
-                lines.append(f"{a['id']}. {a['symbol']} {cond} ${a['price']:,.2f}")
-            lines.append("\n💡 /delalert НОМЕР")
-            send_telegram_message(chat_id, "\n".join(lines))
-        else:
-            send_telegram_message(chat_id, "У вас нет активных алертов.")
-
-    elif command == "/delalert":
-        user = get_user_by_chat_id(chat_id)
-        if not user:
-            send_telegram_message(chat_id, "❌ Сначала привяжите аккаунт.")
-            return
-        try:
-            alert_id = int(parts[1])
-        except:
-            send_telegram_message(chat_id, "❌ Укажите номер: /delalert 1")
-            return
-        delete_alert(alert_id, user["id"])
-        send_telegram_message(chat_id, f"✅ Алерт №{alert_id} удалён")
 
     elif command == "/status":
         user = get_user_by_chat_id(chat_id)

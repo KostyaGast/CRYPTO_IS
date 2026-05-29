@@ -138,61 +138,59 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Проверка Google OAuth
+# ============================================
+# ПРОВЕРКА GOOGLE OAUTH (С ПРИНУДИТЕЛЬНЫМ РЕДИРЕКТОМ)
+# ============================================
 if USE_GOOGLE_AUTH and hasattr(st, 'experimental_user') and st.experimental_user.is_logged_in:
     user_info = st.experimental_user
     google_email = user_info.get("email", "")
     google_name = user_info.get("name", "Google User")
     google_picture = user_info.get("picture", "")
-    
-    # Проверяем, не вошли ли мы уже под другим пользователем
-    current_email = st.session_state.get("user", {}).get("email", "")
-    
-    if current_email == google_email and st.session_state.get("authenticated"):
-        # Уже вошли под этим Google-аккаунтом — ничего не делаем
-        pass
+
+    from database import get_user_by_email, get_connection
+
+    existing_user = get_user_by_email(google_email)
+
+    if existing_user:
+        st.session_state["authenticated"] = True
+        st.session_state["auth_method"] = "google"
+        st.session_state["user"] = existing_user
     else:
-        # Новый вход — ищем или создаём пользователя
-        from database import get_user_by_email, get_connection
-        
-        existing_user = get_user_by_email(google_email)
-        
-        if existing_user:
-            st.session_state["authenticated"] = True
-            st.session_state["auth_method"] = "google"
-            st.session_state["user"] = existing_user
-        else:
-            base_username = google_email.split("@")[0].replace(".", "_")
-            conn = get_connection()
-            cursor = conn.cursor()
-            
-            final_username = base_username
-            counter = 1
-            while True:
-                cursor.execute("SELECT id FROM users WHERE username = ?", (final_username,))
-                if not cursor.fetchone():
-                    break
-                final_username = f"{base_username}_{counter}"
-                counter += 1
-            
-            cursor.execute(
-                "INSERT INTO users (username, email, password_hash) VALUES (?, ?, '')",
-                (final_username, google_email)
-            )
-            conn.commit()
-            user_id = cursor.lastrowid
-            conn.close()
-            
-            st.session_state["authenticated"] = True
-            st.session_state["auth_method"] = "google"
-            st.session_state["user"] = {
-                "id": user_id,
-                "username": final_username,
-                "email": google_email,
-                "picture": google_picture
-            }
-        
-        st.rerun()
+        base_username = google_email.split("@")[0].replace(".", "_")
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        final_username = base_username
+        counter = 1
+        while True:
+            cursor.execute("SELECT id FROM users WHERE username = ?", (final_username,))
+            if not cursor.fetchone():
+                break
+            final_username = f"{base_username}_{counter}"
+            counter += 1
+
+        cursor.execute(
+            "INSERT INTO users (username, email, password_hash) VALUES (?, ?, '')",
+            (final_username, google_email)
+        )
+        conn.commit()
+        user_id = cursor.lastrowid
+        conn.close()
+
+        st.session_state["authenticated"] = True
+        st.session_state["auth_method"] = "google"
+        st.session_state["user"] = {
+            "id": user_id,
+            "username": final_username,
+            "email": google_email,
+            "picture": google_picture
+        }
+
+    # Принудительная перезагрузка страницы для применения сессии
+    st.markdown("""
+        <meta http-equiv="refresh" content="0; url=/">
+    """, unsafe_allow_html=True)
+    st.stop()
 # Анимация загрузки страницы
 st.markdown('<div class="fade-in">', unsafe_allow_html=True)
 
@@ -393,13 +391,14 @@ def auth_screen():
                             except:
                                 pass
 
-                            if not cookie_manager.get("crypto_is_user"):
+                            if not st.session_state.get("cookie_saved", False):
                                 cookie_manager.set("crypto_is_user", {
                                     "id": user_data["id"],
                                     "username": user_data["username"],
                                     "email": user_data["email"]
-                                }, expires_at=datetime.now() + timedelta(days=1))
-                                cookie_manager.set("crypto_is_auth_method", "sqlite", expires_at=datetime.now() + timedelta(days=1))
+                                }, expires_at=datetime.now() + timedelta(days=1), key="cookie_user")
+                                cookie_manager.set("crypto_is_auth_method", "sqlite", expires_at=datetime.now() + timedelta(days=1), key="cookie_auth")
+                                st.session_state["cookie_saved"] = True
                                                         
                             try:
                                 from pages.profile import save_login
@@ -725,39 +724,31 @@ st.markdown("---")
 # ============================================
 from pro_charts import create_pro_chart, create_order_book
 
-tab1, tab2, tab3, tab4 = st.tabs(["📈 Pro-график", "📉 Доходность", "📋 Таблица", "📊 Стакан"])
+tab1, tab2, tab3 = st.tabs(["📈 Pro-график", "📉 Доходность", "📊 Стакан"])
 
 with tab1:
     fig = create_pro_chart(df, f"{symbol} — Pro-график", color)
     st.plotly_chart(fig, use_container_width=True, key="pro_chart")
+
+    # Пояснения к индикаторам
+    with st.expander("ℹ️ Что означают индикаторы RSI и MACD?"):
+        st.markdown("""
+        **RSI (Relative Strength Index)** – индекс относительной силы.
+        - Показывает, перекуплен ли актив (выше 70) или перепродан (ниже 30).
+        - Значения выше 70 могут говорить о скорой коррекции вниз, ниже 30 – о возможном росте.
+        
+        **MACD (Moving Average Convergence Divergence)** – схождение/расхождение скользящих средних.
+        - Гистограмма выше нуля (зелёная) – бычий тренд, ниже (красная) – медвежий.
+        - Пересечение линии MACD и сигнальной линии даёт сигналы на покупку/продажу.
+        """)
 
 with tab2:
     fig = create_performance_chart(df, f"{symbol} — Доходность")
     st.plotly_chart(fig, use_container_width=True, key="tab2_chart")
 
 with tab3:
-    display_df = df.copy()
-    display_df["date"] = display_df["date"].dt.strftime("%Y-%m-%d")
-    display_df = display_df.sort_values("date", ascending=False)
-    
-    for col in ["open", "high", "low", "close"]:
-        if col in display_df.columns:
-            display_df[col] = display_df[col].apply(lambda x: convert_price(x, currency))
-    
-    st.dataframe(display_df, use_container_width=True, hide_index=True)
-    
-    csv = display_df.to_csv(index=False).encode('utf-8-sig')
-    st.download_button(
-        label=t["download"],
-        data=csv,
-        file_name=f"{symbol}_{datetime.now().strftime('%Y%m%d')}.csv",
-        mime="text/csv",
-        use_container_width=True
-    )
-
-with tab4:
     st.markdown("### 📊 Стакан (Order Book)")
-    st.caption("🟢 Слева — покупка (Bid) | 🔴 Справа — продажа (Ask)")
+    #st.caption("🟢 Слева — покупка (Bid) | 🔴 Справа — продажа (Ask)")
     fig = create_order_book(df, f"{symbol} — Стакан", color)
     st.plotly_chart(fig, use_container_width=True, key="order_book")
 # ============================================
