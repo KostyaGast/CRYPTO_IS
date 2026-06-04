@@ -69,8 +69,10 @@ translations = {
         "asset_type": "📂 Тип актива",
         "crypto": "Криптовалюта",
         "stocks": "Акции",
+        "futures": "Фьючерсы и фонды",
         "select_crypto": "📌 Выберите криптовалюту",
         "select_stock": "📌 Выберите акцию",
+        "select_future": "📌 Выберите фьючерс/фонд",
         "depth": "📅 Глубина истории",
         "refresh": "🔄 Обновить",
         "logout": "🚪 Выйти",
@@ -101,8 +103,10 @@ translations = {
         "asset_type": "📂 Asset type",
         "crypto": "Cryptocurrency",
         "stocks": "Stocks",
+        "futures": "Futures & Funds",
         "select_crypto": "📌 Select cryptocurrency",
         "select_stock": "📌 Select stock",
+        "select_future": "📌 Select future/fund",
         "depth": "📅 History depth",
         "refresh": "🔄 Refresh",
         "logout": "🚪 Log out",
@@ -537,126 +541,98 @@ with st.sidebar:
     user = st.session_state["user"]
     display_name = user_settings.get("display_name") or user.get("username", "Пользователь")
     avatar = user_settings.get("avatar") or user.get("picture", "")
-
     col1, col2 = st.columns([1, 3])
     with col1:
-        if avatar:
-            st.image(avatar, width=50)
-        else:
-            st.markdown("👤")
+        if avatar: st.image(avatar, width=50)
+        else: st.markdown("👤")
     with col2:
         st.markdown(f"**{display_name}**")
-        if user.get("email"):
-            st.caption(f"📧 {user['email']}")
-    
+        if user.get("email"): st.caption(f"📧 {user['email']}")
     st.markdown("---")
     
-    if st.button(t["profile"], use_container_width=True):
-        st.switch_page("pages/profile.py")
-    if st.button("📰 Новости", use_container_width=True):
-        st.switch_page("pages/news.py")
-    
+    if st.button(t["profile"], use_container_width=True): st.switch_page("pages/profile.py")
+    if st.button("📰 Новости", use_container_width=True): st.switch_page("pages/news.py")
+    if st.button("📈 Терминал", use_container_width=True):
+        st.switch_page("pages/terminal.py")
     st.markdown("---")
 
-    # ===== ВЫБОР ТИПА АКТИВА (СНАЧАЛА) =====
-    asset_type = st.selectbox(t["asset_type"], [t["crypto"], t["stocks"]])
-    
+    # ===== ВЫБОР ТИПА АКТИВА =====
+    asset_type = st.selectbox(
+        t["asset_type"],
+        [t["crypto"], t["stocks"], t["futures"]]
+    )
+
     if asset_type == t["crypto"]:
         coin_display = st.selectbox(t["select_crypto"], list(config.SUPPORTED_COINS.keys()))
         coin_id = config.SUPPORTED_COINS[coin_display]
         symbol = "BTC" if "BTC" in coin_display else "ETH"
         color = "#F7931A" if symbol == "BTC" else "#627EEA"
         title = f"{coin_display} — {t['crypto']}"
-    else:
+
+    elif asset_type == t["stocks"]:
         from stock_fetcher import WORLD_STOCKS
         stock_display = st.selectbox(t["select_stock"], list(WORLD_STOCKS.keys()))
         symbol = WORLD_STOCKS[stock_display]
         color = "#00ff88"
-        title = f"{stock_display}"
+        title = f"{stock_display} — {t['stocks']}"
         coin_id = None
-    
-    # Выбор периода
+
+    else:  # Фьючерсы и фонды
+        from stock_fetcher import FUTURES, ETFS
+        all_futures = {**FUTURES, **ETFS}
+        future_display = st.selectbox(t["select_future"], list(all_futures.keys()))
+        symbol = all_futures[future_display]
+        color = "#ffaa00"
+        title = f"{future_display} — {t['futures']}"
+        coin_id = None
+
+    # ===== ВЫБОР ПЕРИОДА =====
     period_option = st.selectbox(
         "📅 Период",
         ["1 день", "7 дней", "14 дней", "30 дней", "Своя дата"]
     )
-
     if period_option == "Своя дата":
         col1, col2 = st.columns(2)
-        with col1:
-            start_date = st.date_input("С", value=datetime.now() - timedelta(days=30))
-        with col2:
-            end_date = st.date_input("По", value=datetime.now())
+        with col1: start_date = st.date_input("С", value=datetime.now() - timedelta(days=30))
+        with col2: end_date = st.date_input("По", value=datetime.now())
         days = (end_date - start_date).days
-        if days < 1:
-            days = 1
+        if days < 1: days = 1
     else:
         days = int(period_option.split()[0])
-    
+
     refresh = st.button(t["refresh"], use_container_width=True)
-    
     st.markdown("---")
 
-    # ===== ВИДЖЕТЫ (ПОСЛЕ ОПРЕДЕЛЕНИЯ asset_type) =====
+    # ===== ВИДЖЕТЫ (теперь не зависят от show_widgets) =====
     from widgets import fear_greed_widget, top_crypto_widget
-    
     st.subheader("📊 Виджеты")
     show_widgets = st.checkbox("Показывать виджеты", value=True)
-    
     if show_widgets:
-        # Для криптовалют извлекаем чистый тикер
         if asset_type == t["crypto"]:
             if "(" in symbol and ")" in symbol:
                 clean_symbol = symbol.split("(")[1].split(")")[0]
-            else:
-                clean_symbol = symbol
+            else: clean_symbol = symbol
             fear_greed_widget(asset_type, clean_symbol)
         else:
             fear_greed_widget(asset_type, symbol)
         top_crypto_widget()
-    
     if st.button("🔄 Обновить виджеты", use_container_width=True):
         from widgets import refresh_widgets
         refresh_widgets()
         st.rerun()
-    
     st.markdown("---")
 
     # ===== TELEGRAM =====
     st.subheader("📱 Telegram")
-    st.markdown("""
-    <a href="https://t.me/crypto_is_notify_bot" target="_blank">
-        <button style="
-            background: linear-gradient(135deg, #229ED9, #1C93E3);
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            width: 100%;
-        ">
-            🚀 Открыть бота в Telegram
-        </button>
-    </a>
-    """, unsafe_allow_html=True)
+    st.markdown("""<a href="https://t.me/crypto_is_notify_bot" target="_blank"><button style="background: linear-gradient(135deg, #229ED9, #1C93E3); color: white; border: none; padding: 10px 20px; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; width: 100%;">🚀 Открыть бота в Telegram</button></a>""", unsafe_allow_html=True)
     st.caption("Получайте уведомления о входах и алерты")
-
     st.markdown("---")
     
-    st.markdown(f"""
-    <div class="info-box">
-    <h4>{t['info_box']}</h4>
-    <p>{t['info_text']}</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
+    # ===== ИНФОРМАЦИОННЫЙ БЛОК =====
+    st.markdown(f"""<div class="info-box"><h4>{t['info_box']}</h4><p>{t['info_text']}</p></div>""", unsafe_allow_html=True)
     st.markdown("---")
     
-    if st.button(t["logout"], use_container_width=True):
-        logout()
-    
+    if st.button(t["logout"], use_container_width=True): logout()
     st.caption(f"🕐 {datetime.now().strftime('%H:%M:%S')}")
 
 # ============================================

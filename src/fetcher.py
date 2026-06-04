@@ -100,7 +100,7 @@ class CryptoFetcher:
                     cache = json.load(f)
                     if cache.get("days") == self.days:
                         last_update = datetime.fromisoformat(cache.get("updated_at", "2000-01-01"))
-                        if datetime.now() - last_update < timedelta(hours=1):
+                        if datetime.now() - last_update < timedelta(hours=4):
                             return cache.get("data", [])
             except:
                 pass
@@ -140,7 +140,24 @@ class CryptoFetcher:
             df = df.sort_values("date").reset_index(drop=True)
         
         return df
-
+    def get_current_price(self) -> float:
+        """Получает текущую цену через простой запрос."""
+        try:
+            url = "https://api.coingecko.com/api/v3/simple/price"
+            params = {"ids": self.coin_id, "vs_currencies": "usd"}
+            response = requests.get(url, params=params, timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                return float(data.get(self.coin_id, {}).get("usd", 0))
+        except:
+            pass
+        
+        # Запасной вариант — из кэша
+        df = self.get_data()
+        if not df.empty:
+            return float(df["close"].iloc[-1])
+        
+        return 0.0
 
 def fetch_both_coins(days: int = 30) -> Dict[str, pd.DataFrame]:
     """Получение данных по BTC и ETH одновременно."""

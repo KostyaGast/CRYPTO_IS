@@ -35,11 +35,39 @@ WORLD_STOCKS = {
     "🌍 Dow Jones (^DJI)": "^DJI",
 }
 
+# Фьючерсы
+FUTURES = {
+    "📊 S&P 500 E-mini (ES=F)": "ES=F",
+    "📊 Nasdaq E-mini (NQ=F)": "NQ=F",
+    "📊 Dow Jones E-mini (YM=F)": "YM=F",
+    "🛢️ Crude Oil (CL=F)": "CL=F",
+    "🥇 Gold (GC=F)": "GC=F",
+    "🥈 Silver (SI=F)": "SI=F",
+    "🌽 Corn (ZC=F)": "ZC=F",
+    "🌾 Wheat (ZW=F)": "ZW=F",
+    "🐄 Live Cattle (LE=F)": "LE=F",
+    "🛢️ Natural Gas (NG=F)": "NG=F",
+}
+
+# ETF / Фонды
+ETFS = {
+    "💼 SPDR S&P 500 ETF (SPY)": "SPY",
+    "💼 Invesco QQQ Trust (QQQ)": "QQQ",
+    "💼 iShares Russell 2000 (IWM)": "IWM",
+    "💼 Vanguard Total Stock Market (VTI)": "VTI",
+    "💼 Vanguard FTSE Developed Markets (VEA)": "VEA",
+    "💼 Vanguard FTSE Emerging Markets (VWO)": "VWO",
+    "💼 iShares Core U.S. Aggregate Bond (AGG)": "AGG",
+    "💼 SPDR Gold Shares (GLD)": "GLD",
+    "💼 iShares Silver Trust (SLV)": "SLV",
+    "💼 United States Oil Fund (USO)": "USO",
+}
+
 POPULAR_STOCKS = WORLD_STOCKS.copy()
 
 
 class StockFetcher:
-    """Класс для получения данных по акциям."""
+    """Класс для получения данных по акциям, фьючерсам и ETF."""
     
     def __init__(self, symbol: str = "AAPL", period: str = "1mo"):
         self.symbol = symbol
@@ -62,7 +90,6 @@ class StockFetcher:
             "Close": "close",
             "Volume": "volume"
         })
-        
         df['date'] = pd.to_datetime(df['date']).dt.tz_localize(None)
         df = df[['date', 'open', 'high', 'low', 'close', 'volume']]
         df = df.dropna()
@@ -70,7 +97,7 @@ class StockFetcher:
         return df
     
     def get_info(self) -> Dict:
-        """Получение информации о компании."""
+        """Получение информации о компании/активе."""
         ticker = yf.Ticker(self.symbol)
         info = ticker.info
         

@@ -268,17 +268,14 @@ def create_order_book(
 ) -> go.Figure:
     """
     Создаёт вертикальный стакан в стиле бирж.
-    Бары идут сверху вниз.
-    Слева — покупка (Bid), справа — продажа (Ask).
+    Слева — покупка (Bid, зелёные), справа — продажа (Ask, красные).
     """
     
     current_price = df['close'].iloc[-1]
     
-    # Разделяем на Buy и Sell
     buy_df = df[df['close'] <= current_price].copy()
     sell_df = df[df['close'] > current_price].copy()
     
-    # Шаг цены
     price_range = df['high'].max() - df['low'].min()
     if price_range > 10000:
         step = 500
@@ -295,16 +292,15 @@ def create_order_book(
     buy_volume = buy_df.groupby('level')['volume'].sum().reset_index()
     sell_volume = sell_df.groupby('level')['volume'].sum().reset_index()
     
-    # Сортируем по убыванию цены (сверху вниз)
     buy_volume = buy_volume.sort_values('level', ascending=False).head(20)
     sell_volume = sell_volume.sort_values('level', ascending=False).head(20)
     
     fig = go.Figure()
     
-    # === ПОКУПКА (BID) — СЛЕВА, ЗЕЛЁНЫЕ ===
+    # === ПОКУПКА (BID) — ЗЕЛЁНЫЕ, СЛЕВА (отрицательные X) ===
     fig.add_trace(
         go.Bar(
-            x=buy_volume['volume'],
+            x=[-v for v in buy_volume['volume']],   # ← отрицательные = слева
             y=[f"${x:,.0f}" for x in buy_volume['level']],
             orientation='h',
             marker_color='#00ff88',
@@ -318,10 +314,10 @@ def create_order_book(
         )
     )
     
-    # === ПРОДАЖА (ASK) — СПРАВА, КРАСНЫЕ ===
+    # === ПРОДАЖА (ASK) — КРАСНЫЕ, СПРАВА (положительные X) ===
     fig.add_trace(
         go.Bar(
-            x=[-v for v in sell_volume['volume']],  # Отрицательные значения = слева
+            x=sell_volume['volume'],                # ← положительные = справа
             y=[f"${x:,.0f}" for x in sell_volume['level']],
             orientation='h',
             marker_color='#ff4444',
@@ -349,12 +345,7 @@ def create_order_book(
     
     fig.update_layout(
         template="plotly_dark",
-        title=dict(
-            text=f"<b>{title}</b>",
-            font=dict(size=18),
-            x=0.5,
-            xanchor='center'
-        ),
+        title=dict(text=f"<b>{title}</b>", font=dict(size=18), x=0.5, xanchor='center'),
         xaxis_title="← Покупка (Bid) | Продажа (Ask) →",
         yaxis_title="Цена",
         height=600,
@@ -367,13 +358,8 @@ def create_order_book(
         paper_bgcolor='#0e1117'
     )
     
-    fig.update_xaxes(
-        gridcolor="#1a1c23", 
-        showgrid=True, 
-        zeroline=True, 
-        zerolinecolor="#333",
-        tickformat=",.0f"
-    )
-    fig.update_yaxes(gridcolor="#1a1c23", showgrid=True, categoryorder='array', categoryarray=[f"${x:,.0f}" for x in sorted(list(buy_volume['level']) + list(sell_volume['level']), reverse=True)])
+    fig.update_xaxes(gridcolor="#1a1c23", showgrid=True, zeroline=True, zerolinecolor="#333", tickformat=",.0f")
+    fig.update_yaxes(gridcolor="#1a1c23", showgrid=True, categoryorder='array',
+                     categoryarray=[f"${x:,.0f}" for x in sorted(list(buy_volume['level']) + list(sell_volume['level']), reverse=True)])
     
     return fig
