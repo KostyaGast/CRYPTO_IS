@@ -283,6 +283,8 @@ if "auth_method" not in st.session_state:
     st.session_state["auth_method"] = None
 if "show_reset" not in st.session_state:
     st.session_state["show_reset"] = False
+if "alerts_monitoring_started" not in st.session_state:
+    st.session_state["alerts_monitoring_started"] = False
 
 # ============================================
 # ЗАГРУЗКА НАСТРОЕК ПОСЛЕ АВТОРИЗАЦИИ
@@ -584,8 +586,9 @@ with st.sidebar:
         if user.get("email"): st.caption(f"📧 {user['email']}")
     st.markdown("---")
     
-    if st.button(t["profile"], use_container_width=True): st.switch_page("pages/profile.py")
+    if st.button(t["Профиль"], use_container_width=True): st.switch_page("pages/profile.py")
     if st.button("📰 Новости", use_container_width=True): st.switch_page("pages/news.py")
+    if st.button("🔔 Алерты", use_container_width=True): st.switch_page("pages/alerts.py")
     if st.button("📈 Терминал", use_container_width=True):
         st.switch_page("pages/terminal.py")
     st.markdown("---")
@@ -728,6 +731,19 @@ col4.metric(t["avg"], f"{currency_symbol}{convert_price(df['close'].mean(), curr
 col5.metric(t["trading_days"], len(df))
 
 st.markdown("---")
+
+# ============================================
+# ЗАПУСК МОНИТОРИНГА АЛЕРТОВ (ОДИН РАЗ)
+# ============================================
+if not st.session_state.get("alerts_monitoring_started", False):
+    try:
+        from alerts.checker import start_alerts_monitoring
+        start_alerts_monitoring()
+        st.session_state.alerts_monitoring_started = True
+        print("✅ Мониторинг алертов запущен")
+    except Exception as e:
+        print(f"⚠️ Мониторинг алертов не запущен: {e}")
+
 
 # ============================================
 # ГРАФИКИ (Pro)
