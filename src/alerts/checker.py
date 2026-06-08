@@ -6,6 +6,7 @@ import threading
 import sys
 import os
 from datetime import datetime
+from email_sender import send_alert_email
 
 # Добавляем путь к проекту
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -194,12 +195,12 @@ def check_alerts_loop():
                 
                 # Отправляем на Email
                 if alert.get("email"):
-                    send_email_alert(
-                        alert["email"],
-                        alert["symbol"],
-                        alert["condition"],
-                        alert["target_price"],
-                        alert["current_price"]
+                    send_alert_email(
+                        to_email=alert["email"],
+                        symbol=alert["symbol"],
+                        condition=alert["condition"],
+                        target_price=alert["target_price"],
+                        current_price=alert["current_price"]
                     )
                 
                 # Деактивируем сработавший алерт
