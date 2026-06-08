@@ -398,11 +398,11 @@ def auth_screen():
         </p>
     </div>
     """, unsafe_allow_html=True)
+
+    # ОДНА КОЛОНКА ПО ЦЕНТРУ
+    col1, col2, col3 = st.columns([1, 2, 1])
     
-    # Две колонки: форма входа/регистрации и Google
-    col_left, col_right = st.columns([2, 1])
-    
-    with col_left:
+    with col2:
         # Вкладки для Email/Пароль и Регистрация
         tab1, tab2 = st.tabs([t["login_email"], t["register"]])
         
