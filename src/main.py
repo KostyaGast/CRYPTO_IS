@@ -586,7 +586,7 @@ with st.sidebar:
         if user.get("email"): st.caption(f"📧 {user['email']}")
     st.markdown("---")
     
-    if st.button(["👤 Профиль"], use_container_width=True): st.switch_page("pages/profile.py")
+    if st.button("👤 Профиль", use_container_width=True): st.switch_page("pages/profile.py")
     if st.button("📰 Новости", use_container_width=True): st.switch_page("pages/news.py")
     if st.button("🔔 Алерты", use_container_width=True): st.switch_page("pages/alerts.py")
     if st.button("📈 Терминал", use_container_width=True):
