@@ -4,6 +4,7 @@
 import streamlit as st
 import feedparser
 from datetime import datetime
+import re
 
 st.set_page_config(
     page_title="Новости | Crypto IS",
@@ -31,7 +32,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Словарь с источниками (должен быть ПЕРЕД использованием)
+# Словарь с источниками
 rss_feeds = {
     "CoinTelegraph (EN)": "https://cointelegraph.com/rss",
     "CoinDesk (EN)": "https://www.coindesk.com/arc/outboundfeeds/rss/",
@@ -42,14 +43,6 @@ rss_feeds = {
     "🇷🇺 Хабр": "https://habr.com/ru/rss/news/?fl=ru",
 }
 
-# Выбор источника
-col1, col2, col3 = st.columns([1, 1, 1])
-with col1:
-    source = st.selectbox(
-        "📡 Источник",
-        list(rss_feeds.keys()),
-        label_visibility="collapsed"
-    )
 # ============================================
 # CSS СТИЛИ
 # ============================================
@@ -158,6 +151,15 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# Выбор источника
+col1, col2, col3 = st.columns([1, 1, 1])
+with col1:
+    source = st.selectbox(
+        "📡 Источник",
+        list(rss_feeds.keys()),
+        label_visibility="collapsed"
+    )
+
 # ============================================
 # ЗАГРУЗКА НОВОСТЕЙ
 # ============================================
@@ -217,7 +219,6 @@ else:
         summary = ""
         if hasattr(entry, 'summary'):
             # Убираем HTML-теги для превью
-            import re
             summary = re.sub(r'<[^>]+>', '', entry.summary)
             summary = summary[:300] + "..." if len(summary) > 300 else summary
         
@@ -237,30 +238,30 @@ else:
                 if 'image' in link_item.get('type', ''):
                     image_url = link_item.get('href')
                     break
-        # Если нет картинки в метаданных, пробуем найти в описании
+        
         if not image_url and hasattr(entry, 'summary'):
-            import re as regex
-            img_match = regex.search(r'<img[^>]+src="([^">]+)"', entry.summary)
+            img_match = re.search(r'<img[^>]+src="([^">]+)"', entry.summary)
             if img_match:
                 image_url = img_match.group(1)
         
-        # Карточка новости
-        st.markdown(f"""
-        <div class="news-card">
-            <div class="news-title">
-                <a href="{link}" target="_blank">{title}</a>
-            </div>
-            <div class="news-meta">
-                <span>📅 {date_str}</span>
-                <span>✍️ {author}</span>
-                <span>📡 {source}</span>
-            </div>
-            {f'<div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px;">{"".join(f"<span class=\"news-tag\">{tag}</span>" for tag in tags)}</div>' if tags else ''}
-            {f'<img src="{image_url}" style="max-width:100%;border-radius:12px;margin-bottom:12px;max-height:300px;object-fit:cover;" />' if image_url else ''}
-            <div class="news-description">{summary}</div>
-            <a href="{link}" target="_blank" class="read-more">📖 Читать полностью</a>
-        </div>
-        """, unsafe_allow_html=True)
+        # Формируем HTML карточки (БЕЗ f-строки с обратными слешами)
+        st.markdown('<div class="news-card">', unsafe_allow_html=True)
+        st.markdown(f'<div class="news-title"><a href="{link}" target="_blank">{title}</a></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="news-meta"><span>📅 {date_str}</span><span>✍️ {author}</span><span>📡 {source}</span></div>', unsafe_allow_html=True)
+        
+        if tags:
+            tags_html = '<div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px;">'
+            for tag in tags:
+                tags_html += f'<span class="news-tag">{tag}</span>'
+            tags_html += '</div>'
+            st.markdown(tags_html, unsafe_allow_html=True)
+        
+        if image_url:
+            st.markdown(f'<img src="{image_url}" style="max-width:100%; border-radius:12px; margin-bottom:12px; max-height:300px; object-fit:cover;" />', unsafe_allow_html=True)
+        
+        st.markdown(f'<div class="news-description">{summary}</div>', unsafe_allow_html=True)
+        st.markdown(f'<a href="{link}" target="_blank" class="read-more">📖 Читать полностью</a>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
 # ============================================
 # ПОДВАЛ

@@ -16,6 +16,110 @@ from database import place_order, get_portfolio, get_orders, get_balance, get_co
 
 st.set_page_config(page_title="Терминал | Crypto IS", page_icon="📈", layout="wide")
 
+# ============================================
+# КЭШИРОВАНИЕ ДЛЯ УСКОРЕНИЯ (ДОБАВЛЕНО)
+# ============================================
+
+@st.cache_data(ttl=10)  # Кэш на 10 секунд
+def get_cached_crypto_price(coin_id: str) -> float:
+    """Кэшированное получение цены криптовалюты"""
+    try:
+        fetcher = CryptoFetcher(coin_id)
+        return fetcher.get_current_price()
+    except:
+        return 0.0
+
+@st.cache_data(ttl=10)
+def get_cached_stock_price(symbol: str) -> float:
+    """Кэшированное получение цены акции"""
+    try:
+        fetcher = StockFetcher(symbol, period="1d")
+        data = fetcher.get_data()
+        if not data.empty:
+            return data['close'].iloc[-1]
+        return 0.0
+    except:
+        return 0.0
+
+@st.cache_data(ttl=30)
+def get_cached_crypto_history(coin_id: str, days: int = 7) -> pd.DataFrame:
+    """Кэшированное получение истории криптовалюты"""
+    try:
+        fetcher = CryptoFetcher(coin_id, days=days)
+        return fetcher.get_data()
+    except:
+        return pd.DataFrame()
+
+@st.cache_data(ttl=30)
+def get_cached_stock_history(symbol: str, period: str = "7d") -> pd.DataFrame:
+    """Кэшированное получение истории акции"""
+    try:
+        fetcher = StockFetcher(symbol, period=period)
+        return fetcher.get_data()
+    except:
+        return pd.DataFrame()
+
+@st.cache_data(ttl=10)
+def get_all_portfolio_prices(portfolio_items_hashable):
+    """Загрузить цены для всего портфеля за один вызов"""
+    prices = {}
+    for item in portfolio_items_hashable:
+        symbol = item['symbol']
+        # Определяем тип актива
+        is_crypto = any(symbol in c for c in config.SUPPORTED_COINS.values())
+        
+        if is_crypto:
+            coin_id = symbol.lower()
+            if coin_id in config.SUPPORTED_COINS.values():
+                prices[symbol] = get_cached_crypto_price(coin_id)
+            else:
+                prices[symbol] = get_cached_crypto_price("bitcoin")
+        else:
+            prices[symbol] = get_cached_stock_price(symbol)
+    return prices
+
+@st.cache_data(ttl=10)
+def get_ticker_data_cached():
+    """Кэшированное получение данных для бегущей строки"""
+    ticker_items = []
+    assets = [
+        ("BTC", "bitcoin"), ("ETH", "ethereum"), ("SOL", "solana"),
+        ("BNB", "binancecoin"), ("XRP", "ripple"), ("ADA", "cardano"),
+        ("AAPL", None, "stock"), ("TSLA", None, "stock"), ("NVDA", None, "stock"),
+        ("GOOGL", None, "stock"), ("MSFT", None, "stock")
+    ]
+    
+    for symbol, coin_id, *asset_type in assets:
+        try:
+            if coin_id:
+                df = get_cached_crypto_history(coin_id, days=2)
+                if not df.empty:
+                    current_price = df['close'].iloc[-1]
+                    prev_price = df['close'].iloc[-2] if len(df) > 1 else current_price
+                    change = ((current_price - prev_price) / prev_price) * 100
+            else:
+                df = get_cached_stock_history(symbol, period="2d")
+                if not df.empty:
+                    current_price = df['close'].iloc[-1]
+                    prev_price = df['close'].iloc[-2] if len(df) > 1 else current_price
+                    change = ((current_price - prev_price) / prev_price) * 100
+                else:
+                    continue
+            
+            color_class = "up" if change >= 0 else "down"
+            arrow = "▲" if change >= 0 else "▼"
+            ticker_items.append(
+                f'<span class="ticker-item {color_class}">{symbol}: ${current_price:,.2f} '
+                f'{arrow} {abs(change):.2f}%</span>'
+            )
+        except Exception as e:
+            continue
+    
+    ticker_html = '<div class="ticker-container"><div class="ticker-wrap">'
+    ticker_html += ''.join(ticker_items * 2)
+    ticker_html += '</div></div>'
+    return ticker_html
+
 # Проверка авторизации
 if not st.session_state.get("authenticated", False):
     st.warning("🔒 Доступ только для авторизованных пользователей.")
@@ -263,7 +367,7 @@ def get_ticker_data():
     return ticker_html
 
 with st.spinner("Загрузка рыночных данных..."):
-    ticker_html = get_ticker_data()
+    ticker_html = get_ticker_data_cached()
     st.markdown(ticker_html, unsafe_allow_html=True)
 
 # ============================================
@@ -281,17 +385,15 @@ portfolio_details = []
 
 for h in port:
     try:
-        # Определяем текущую цену
+        # Определяем текущую цену (с кэшированием)
         if any(h["symbol"] in c for c in config.SUPPORTED_COINS.values()):
             coin_id = h["symbol"].lower()
             if coin_id in config.SUPPORTED_COINS.values():
-                current_price = CryptoFetcher(coin_id).get_current_price()
+                current_price = get_cached_crypto_price(coin_id)
             else:
-                current_price = CryptoFetcher("bitcoin").get_current_price()
+                current_price = get_cached_crypto_price("bitcoin")
         else:
-            fetcher = StockFetcher(h["symbol"], period="1d")
-            data = fetcher.get_data()
-            current_price = data['close'].iloc[-1] if not data.empty else 0
+            current_price = get_cached_stock_price(h["symbol"])
         
         position_value = current_price * h["quantity"]
         total_value += position_value
@@ -412,7 +514,7 @@ with col_left:
         symbol = selected.split("(")[1].split(")")[0]
         coin_id = config.SUPPORTED_COINS[selected]
         try:
-            current_price = CryptoFetcher(coin_id).get_current_price()
+            current_price = get_cached_crypto_price(coin_id)  # ← ИЗМЕНЕНО
         except:
             current_price = 0
     elif asset_type == "Акции":
@@ -420,9 +522,7 @@ with col_left:
         selected = st.selectbox("Актив", names)
         symbol = WORLD_STOCKS[selected]
         try:
-            fetcher = StockFetcher(symbol, period="1d")
-            data = fetcher.get_data()
-            current_price = data['close'].iloc[-1] if not data.empty else 0
+            current_price = get_cached_stock_price(symbol)  # ← ИЗМЕНЕНО (упрощено)
         except:
             current_price = 0
     else:
@@ -431,9 +531,7 @@ with col_left:
         selected = st.selectbox("Актив", names)
         symbol = all_futures[selected]
         try:
-            fetcher = StockFetcher(symbol, period="1d")
-            data = fetcher.get_data()
-            current_price = data['close'].iloc[-1] if not data.empty else 0
+            current_price = get_cached_stock_price(symbol)  # ← ИЗМЕНЕНО (упрощено)
         except:
             current_price = 0
     
@@ -545,9 +643,9 @@ with col_left:
     
     try:
         if asset_type == "Криптовалюта" and coin_id:
-            df = CryptoFetcher(coin_id, days=7).get_data()
+            df = get_cached_crypto_history(coin_id, days=7)
         elif asset_type in ["Акции", "Фьючерсы и фонды"]:
-            df = StockFetcher(symbol, period="7d").get_data()
+            df = get_cached_stock_history(symbol, period="7d")
         else:
             df = pd.DataFrame()
         
