@@ -496,13 +496,15 @@ def auth_screen():
             
             if st.button("🚀 Войти через Google", use_container_width=True, type="primary"):
                 import webbrowser
-                auth_url = "https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=495761628775-pavraj5po9ggfi5itgp1ga67i4s15qij.apps.googleusercontent.com&redirect_uri=http://localhost:8501/oauth2callback&scope=openid%20email%20profile&access_type=offline"
+                auth_url = "https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=495761628775-pavraj5po9ggfi5itgp1ga67i4s15qij.apps.googleusercontent.com&redirect_uri=http://localhost:8501/oauth2callback&scope=openid%20email%20profile&access_type=offline&prompt=select_account"
                 webbrowser.open(auth_url)
-                st.success("Откроется окно Google. После входа скопируйте код из адресной строки")
+                st.info("✅ Откроется новое окно браузера. Войдите в Google и скопируйте код из адресной строки.")
                 
-                code = st.text_input("Вставьте код сюда:")
+                code = st.text_input("📋 Вставьте код сюда:")
                 if code:
-                    st.success(f"Код получен! Дальше обработаем...")
+                    st.success(f"Код получен: {code[:20]}...")
+                    st.session_state["google_code"] = code
+                    st.rerun()
             
             st.markdown("""
             <div style="text-align: center; margin-top: 20px;">
