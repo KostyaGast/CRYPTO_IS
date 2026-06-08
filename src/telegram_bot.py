@@ -31,7 +31,156 @@ from database import (
 )
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-print(f"DEBUG: BOT_TOKEN = {BOT_TOKEN[:10]}...")
+print(f"DEBUG: BOT_TOKEN = {BOT_TOKEN[:10] if BOT_TOKEN else 'NOT_SET'}...")
+
+# ============================================
+# ПОДДЕРЖКА ЯЗЫКОВ
+# ============================================
+
+BOT_TEXTS = {
+    "ru": {
+        "welcome_unlinked": "🤖 <b>Crypto IS Bot</b>\n\nДобро пожаловать! Чтобы пользоваться ботом, привяжите аккаунт.\n\n<b>🔗 Как привязать:</b>\n1. Войдите в личный кабинет на сайте\n2. Перейдите во вкладку \"Telegram\"\n3. Скопируйте 6-значный код\n4. Отправьте его сюда\n\n🌐 <a href='https://cryptois.abrdns.com'>Перейти на сайт</a>",
+        "welcome_linked": "🤖 <b>Crypto IS Bot</b>\n\nС возвращением, {{username}}!\n\n<b>📋 Основные команды:</b>\n/price — BTC и ETH\n/top — топ-5 криптовалют\n/stocks — популярные акции\n/crypto — список всех криптовалют\n/stocks_full — список всех акций\n/crypto_info BTC — детали по крипте\n/stock_info AAPL — детали по акции\n/news — последние новости\n/fear — индекс страха и жадности\n/help — все команды\n\n<b>👤 Аккаунт:</b>\n/status — статус привязки\n/unlink — отвязать",
+        "help_linked": "📋 <b>Все команды:</b>\n\n<b>💰 Цены:</b>\n/price — BTC и ETH\n/top — топ-5 криптовалют\n/stocks — популярные акции\n/crypto_info BTC — детальная информация по крипте\n/stock_info AAPL — детальная информация по акции\n/fear — индекс страха и жадности\n\n<b>📋 Списки:</b>\n/crypto — все криптовалюты\n/stocks_full — все акции\n\n<b>📰 Новости:</b>\n/news — последние новости\n\n<b>👤 Аккаунт:</b>\n/status — статус привязки\n/unlink — отвязать",
+        "help_unlinked": "📋 <b>Доступные команды:</b>\n\n/start — приветствие\n/help — этот список\n\n🔒 Для доступа к остальным командам привяжите аккаунт.\nОтправьте 6-значный код из личного кабинета.",
+        "need_auth": "🔒 <b>Доступ ограничен</b>\n\nВы не привязали свой Telegram к аккаунту Crypto IS.\n\n<b>Как привязать:</b>\n1. Войдите в личный кабинет на сайте\n2. Перейдите во вкладку \"Telegram\"\n3. Скопируйте код и отправьте его сюда\n\n🌐 <a href='https://cryptois.abrdns.com'>Перейти на сайт</a>",
+        "price_title": "💰 <b>Текущие цены</b>",
+        "btc": "₿ Bitcoin (BTC)",
+        "eth": "💎 Ethereum (ETH)",
+        "price_usd": "Цена: <b>${:,.0f}</b>",
+        "price_change": "24ч: {} {:.2f}%",
+        "top_title": "🏆 <b>Топ-5 криптовалют</b>",
+        "stocks_title": "📈 <b>Популярные акции</b>",
+        "news_title": "📰 <b>Последние новости</b>",
+        "fear_title": "😨 <b>Индекс страха и жадности</b>",
+        "no_data": "❌ Не удалось получить данные.",
+        "no_news": "❌ Не удалось загрузить новости.",
+        "need_crypto_symbol": "❌ Укажите тикер: /crypto_info BTC",
+        "need_stock_symbol": "❌ Укажите тикер: /stock_info AAPL",
+        "unknown": "❓ Неизвестная команда. /help",
+        "linked_status": "✅ Аккаунт привязан к <b>{}</b>",
+        "not_linked_status": "❌ Аккаунт не привязан.",
+        "unlinked": "✅ Аккаунт отвязан.",
+        "login_notification": "🔐 <b>Вход в систему</b>\n\n👤 {}\n🌐 {}\n🕐 {}",
+        "invalid_code": "❌ Неверный код",
+        "code_sent": "✅ Код подтверждён",
+    },
+    "en": {
+        "welcome_unlinked": "🤖 <b>Crypto IS Bot</b>\n\nWelcome! To use the bot, link your account.\n\n<b>🔗 How to link:</b>\n1. Log in to your account on the website\n2. Go to the \"Telegram\" tab\n3. Copy the 6-digit code\n4. Send it here\n\n🌐 <a href='https://cryptois.abrdns.com'>Go to website</a>",
+        "welcome_linked": "🤖 <b>Crypto IS Bot</b>\n\nWelcome back, {{username}}!\n\n<b>📋 Main commands:</b>\n/price — BTC and ETH\n/top — top-5 cryptocurrencies\n/stocks — popular stocks\n/crypto — all cryptocurrencies\n/stocks_full — all stocks\n/crypto_info BTC — crypto details\n/stock_info AAPL — stock details\n/news — latest news\n/fear — Fear & Greed Index\n/help — all commands\n\n<b>👤 Account:</b>\n/status — link status\n/unlink — unlink",
+        "help_linked": "📋 <b>All commands:</b>\n\n<b>💰 Prices:</b>\n/price — BTC and ETH\n/top — top-5 cryptocurrencies\n/stocks — popular stocks\n/crypto_info BTC — detailed crypto info\n/stock_info AAPL — detailed stock info\n/fear — Fear & Greed Index\n\n<b>📋 Lists:</b>\n/crypto — all cryptocurrencies\n/stocks_full — all stocks\n\n<b>📰 News:</b>\n/news — latest news\n\n<b>👤 Account:</b>\n/status — link status\n/unlink — unlink",
+        "help_unlinked": "📋 <b>Available commands:</b>\n\n/start — welcome\n/help — this list\n\n🔒 To access other commands, link your account.\nSend the 6-digit code from your profile.",
+        "need_auth": "🔒 <b>Access restricted</b>\n\nYou haven't linked your Telegram to your Crypto IS account.\n\n<b>How to link:</b>\n1. Log in to your account on the website\n2. Go to the \"Telegram\" tab\n3. Copy the 6-digit code and send it here\n\n🌐 <a href='https://cryptois.abrdns.com'>Go to website</a>",
+        "price_title": "💰 <b>Current prices</b>",
+        "btc": "₿ Bitcoin (BTC)",
+        "eth": "💎 Ethereum (ETH)",
+        "price_usd": "Price: <b>${:,.0f}</b>",
+        "price_change": "24h: {} {:.2f}%",
+        "top_title": "🏆 <b>Top-5 cryptocurrencies</b>",
+        "stocks_title": "📈 <b>Popular stocks</b>",
+        "news_title": "📰 <b>Latest news</b>",
+        "fear_title": "😨 <b>Fear & Greed Index</b>",
+        "no_data": "❌ Failed to get data.",
+        "no_news": "❌ Failed to load news.",
+        "need_crypto_symbol": "❌ Specify ticker: /crypto_info BTC",
+        "need_stock_symbol": "❌ Specify ticker: /stock_info AAPL",
+        "unknown": "❓ Unknown command. /help",
+        "linked_status": "✅ Account linked to <b>{}</b>",
+        "not_linked_status": "❌ Account not linked.",
+        "unlinked": "✅ Account unlinked.",
+        "login_notification": "🔐 <b>Login to system</b>\n\n👤 {}\n🌐 {}\n🕐 {}",
+        "invalid_code": "❌ Invalid code",
+        "code_sent": "✅ Code confirmed",
+    },
+    "zh": {
+        "welcome_unlinked": "🤖 <b>Crypto IS 机器人</b>\n\n欢迎！要使用机器人，请先绑定您的账户。\n\n<b>🔗 如何绑定：</b>\n1. 登录网站账户\n2. 进入“Telegram”选项卡\n3. 复制6位验证码\n4. 发送到这里\n\n🌐 <a href='https://cryptois.abrdns.com'>访问网站</a>",
+        "welcome_linked": "🤖 <b>Crypto IS 机器人</b>\n\n欢迎回来，{{username}}！\n\n<b>📋 主要命令：</b>\n/price — 比特币和以太坊\n/top — 加密货币前五名\n/stocks — 热门股票\n/crypto — 所有加密货币\n/stocks_full — 所有股票\n/crypto_info BTC — 加密货币详细信息\n/stock_info AAPL — 股票详细信息\n/news — 最新新闻\n/fear — 恐惧与贪婪指数\n/help — 所有命令\n\n<b>👤 账户：</b>\n/status — 绑定状态\n/unlink — 解绑",
+        "help_linked": "📋 <b>所有命令：</b>\n\n<b>💰 价格：</b>\n/price — 比特币和以太坊\n/top — 加密货币前五名\n/stocks — 热门股票\n/crypto_info BTC — 加密货币详细信息\n/stock_info AAPL — 股票详细信息\n/fear — 恐惧与贪婪指数\n\n<b>📋 列表：</b>\n/crypto — 所有加密货币\n/stocks_full — 所有股票\n\n<b>📰 新闻：</b>\n/news — 最新新闻\n\n<b>👤 账户：</b>\n/status — 绑定状态\n/unlink — 解绑",
+        "help_unlinked": "📋 <b>可用命令：</b>\n\n/start — 欢迎\n/help — 此列表\n\n🔒 要访问其他命令，请绑定您的账户。\n发送个人资料中的6位验证码。",
+        "need_auth": "🔒 <b>访问受限</b>\n\n您尚未将 Telegram 绑定到 Crypto IS 账户。\n\n<b>如何绑定：</b>\n1. 登录网站账户\n2. 进入“Telegram”选项卡\n3. 复制6位验证码并发送到这里\n\n🌐 <a href='https://cryptois.abrdns.com'>访问网站</a>",
+        "price_title": "💰 <b>当前价格</b>",
+        "btc": "₿ 比特币 (BTC)",
+        "eth": "💎 以太坊 (ETH)",
+        "price_usd": "价格：<b>${:,.0f}</b>",
+        "price_change": "24小时：{} {:.2f}%",
+        "top_title": "🏆 <b>加密货币前五名</b>",
+        "stocks_title": "📈 <b>热门股票</b>",
+        "news_title": "📰 <b>最新新闻</b>",
+        "fear_title": "😨 <b>恐惧与贪婪指数</b>",
+        "no_data": "❌ 无法获取数据。",
+        "no_news": "❌ 无法加载新闻。",
+        "need_crypto_symbol": "❌ 请指定代币：/crypto_info BTC",
+        "need_stock_symbol": "❌ 请指定代码：/stock_info AAPL",
+        "unknown": "❓ 未知命令。发送 /help",
+        "linked_status": "✅ 账户已绑定到 <b>{}</b>",
+        "not_linked_status": "❌ 账户未绑定。",
+        "unlinked": "✅ 账户已解绑。",
+        "login_notification": "🔐 <b>系统登录</b>\n\n👤 {}\n🌐 {}\n🕐 {}",
+        "invalid_code": "❌ 验证码错误",
+        "code_sent": "✅ 验证码已验证",
+    }
+}
+
+# ============================================
+# ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+# ============================================
+
+def get_user_language(chat_id: str) -> str:
+    """Получает язык пользователя из базы данных"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        # Проверяем, есть ли колонка language
+        cursor.execute("PRAGMA table_info(users)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if 'language' in columns:
+            cursor.execute("""
+                SELECT language FROM users 
+                WHERE telegram_chat_id = ? AND telegram_verified = 1
+            """, (chat_id,))
+            result = cursor.fetchone()
+            if result and result["language"]:
+                return result["language"]
+    except Exception as e:
+        print(f"Ошибка получения языка: {e}")
+    return "ru"  # язык по умолчанию
+
+def send_localized_message(chat_id: str, key: str, **kwargs) -> bool:
+    """Отправляет локализованное сообщение"""
+    if not BOT_TOKEN or not chat_id:
+        return False
+    
+    lang = get_user_language(chat_id)
+    text = BOT_TEXTS.get(lang, BOT_TEXTS["ru"]).get(key, key)
+    
+    # Подставляем параметры
+    if kwargs:
+        for k, v in kwargs.items():
+            text = text.replace("{{" + k + "}}", str(v))
+            text = text.replace("{" + k + "}", str(v))
+    
+    try:
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+        data = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
+        response = requests.post(url, data=data, timeout=10)
+        return response.status_code == 200
+    except Exception as e:
+        print(f"❌ Ошибка отправки в Telegram: {e}")
+        return False
+
+# Оставляем старую функцию для обратной совместимости
+def send_telegram_message(chat_id: str, message: str) -> bool:
+    """Отправляет сырое сообщение в Telegram"""
+    if not BOT_TOKEN or not chat_id:
+        return False
+    try:
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+        data = {"chat_id": chat_id, "text": message, "parse_mode": "HTML"}
+        response = requests.post(url, data=data, timeout=10)
+        return response.status_code == 200
+    except Exception as e:
+        print(f"❌ Ошибка отправки в Telegram: {e}")
+        return False
 
 # ============================================
 # ПРОВЕРКА ПРИВЯЗКИ
@@ -45,18 +194,7 @@ def is_user_verified(chat_id: str) -> bool:
 def require_auth(chat_id: str) -> bool:
     """Требует авторизацию. Возвращает True, если пользователь привязан."""
     if not is_user_verified(chat_id):
-        send_telegram_message(chat_id, """
-🔒 <b>Доступ ограничен</b>
-
-Вы не привязали свой Telegram к аккаунту Crypto IS.
-
-<b>Как привязать:</b>
-1. Войдите в личный кабинет на сайте
-2. Перейдите во вкладку "Telegram"
-3. Скопируйте код и отправьте его сюда
-
-🌐 <a href="https://cryptois.abrdns.com">Перейти на сайт</a>
-""")
+        send_localized_message(chat_id, "need_auth")
         return False
     return True
 
@@ -74,18 +212,6 @@ def unlink_telegram(chat_id: str):
     conn.commit()
     conn.close()
     return True
-
-def send_telegram_message(chat_id: str, message: str) -> bool:
-    if not BOT_TOKEN or not chat_id:
-        return False
-    try:
-        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-        data = {"chat_id": chat_id, "text": message, "parse_mode": "HTML"}
-        response = requests.post(url, data=data, timeout=10)
-        return response.status_code == 200
-    except Exception as e:
-        print(f"❌ Ошибка отправки в Telegram: {e}")
-        return False
 
 def get_user_by_chat_id(chat_id: str):
     conn = get_connection()
@@ -272,76 +398,15 @@ def process_telegram_update(update: dict):
     if command == "/start":
         if is_user_verified(chat_id):
             user = get_user_by_chat_id(chat_id)
-            send_telegram_message(chat_id, f"""
-🤖 <b>Crypto IS Bot</b>
-
-С возвращением, {user['username']}!
-
-<b>📋 Основные команды:</b>
-/price — BTC и ETH
-/top — топ-5 криптовалют
-/stocks — популярные акции
-/crypto — список всех криптовалют
-/stocks_full — список всех акций
-/crypto_info BTC — детали по крипте
-/stock_info AAPL — детали по акции
-/news — последние новости
-/fear — индекс страха и жадности
-/help — все команды
-
-<b>👤 Аккаунт:</b>
-/status — статус привязки
-/unlink — отвязать
-""")
+            send_localized_message(chat_id, "welcome_linked", username=user['username'])
         else:
-            send_telegram_message(chat_id, """
-🤖 <b>Crypto IS Bot</b>
-
-Добро пожаловать! Чтобы пользоваться ботом, привяжите аккаунт.
-
-<b>🔗 Как привязать:</b>
-1. Войдите в личный кабинет на сайте
-2. Перейдите во вкладку "Telegram"
-3. Скопируйте 6-значный код
-4. Отправьте его сюда
-
-🌐 <a href="https://cryptois.abrdns.com">Перейти на сайт</a>
-""")
+            send_localized_message(chat_id, "welcome_unlinked")
 
     elif command == "/help":
         if is_user_verified(chat_id):
-            send_telegram_message(chat_id, """
-📋 <b>Все команды:</b>
-
-<b>💰 Цены:</b>
-/price — BTC и ETH
-/top — топ-5 криптовалют
-/stocks — популярные акции
-/crypto_info BTC — детальная информация по крипте
-/stock_info AAPL — детальная информация по акции
-/fear — индекс страха и жадности
-
-<b>📋 Списки:</b>
-/crypto — все криптовалюты
-/stocks_full — все акции
-
-<b>📰 Новости:</b>
-/news — последние новости
-
-<b>👤 Аккаунт:</b>
-/status — статус привязки
-/unlink — отвязать
-""")
+            send_localized_message(chat_id, "help_linked")
         else:
-            send_telegram_message(chat_id, """
-📋 <b>Доступные команды:</b>
-
-/start — приветствие
-/help — этот список
-
-🔒 Для доступа к остальным командам привяжите аккаунт.
-Отправьте 6-значный код из личного кабинета.
-""")
+            send_localized_message(chat_id, "help_unlinked")
 
     elif command == "/price":
         data = get_crypto_prices()
@@ -349,55 +414,65 @@ def process_telegram_update(update: dict):
             btc, eth = data.get("bitcoin", {}), data.get("ethereum", {})
             btc_emoji = "🟢" if btc.get("usd_24h_change", 0) >= 0 else "🔴"
             eth_emoji = "🟢" if eth.get("usd_24h_change", 0) >= 0 else "🔴"
+            
+            lang = get_user_language(chat_id)
+            texts = BOT_TEXTS.get(lang, BOT_TEXTS["ru"])
+            
             message = f"""
-💰 <b>Текущие цены</b>
+{texts['price_title']}
 
-<b>₿ Bitcoin (BTC)</b>
-Цена: <b>${btc.get('usd', 0):,.0f}</b>
-24ч: {btc_emoji} {btc.get('usd_24h_change', 0):+.2f}%
+<b>{texts['btc']}</b>
+{texts['price_usd'].format(btc.get('usd', 0))}
+{texts['price_change'].format(btc_emoji, btc.get('usd_24h_change', 0))}
 
-<b>💎 Ethereum (ETH)</b>
-Цена: <b>${eth.get('usd', 0):,.0f}</b>
-24ч: {eth_emoji} {eth.get('usd_24h_change', 0):+.2f}%
+<b>{texts['eth']}</b>
+{texts['price_usd'].format(eth.get('usd', 0))}
+{texts['price_change'].format(eth_emoji, eth.get('usd_24h_change', 0))}
 """
             send_telegram_message(chat_id, message)
         else:
-            send_telegram_message(chat_id, "❌ Не удалось получить данные.")
+            send_localized_message(chat_id, "no_data")
 
     elif command == "/top":
         data = get_top_cryptos()
         if data:
-            lines = ["🏆 <b>Топ-5 криптовалют</b>\n"]
+            lang = get_user_language(chat_id)
+            texts = BOT_TEXTS.get(lang, BOT_TEXTS["ru"])
+            lines = [f"{texts['top_title']}\n"]
             for i, coin in enumerate(data, 1):
                 emoji = "🟢" if coin["price_change_percentage_24h"] >= 0 else "🔴"
                 lines.append(f"{i}. <b>{coin['name']} ({coin['symbol'].upper()})</b>")
                 lines.append(f"   ${coin['current_price']:,.2f} {emoji} {coin['price_change_percentage_24h']:+.2f}%")
             send_telegram_message(chat_id, "\n".join(lines))
         else:
-            send_telegram_message(chat_id, "❌ Не удалось получить данные.")
+            send_localized_message(chat_id, "no_data")
 
     elif command == "/stocks":
         data = get_stocks_prices()
         if data:
-            lines = ["📈 <b>Популярные акции</b>\n"]
+            lang = get_user_language(chat_id)
+            texts = BOT_TEXTS.get(lang, BOT_TEXTS["ru"])
+            lines = [f"{texts['stocks_title']}\n"]
             for sym, info in data.items():
                 emoji = "🟢" if info["change"] >= 0 else "🔴"
                 lines.append(f"<b>{info['name']} ({sym})</b>")
                 lines.append(f"   ${info['price']:,.2f} {emoji} {info['change']:+.2f}%")
             send_telegram_message(chat_id, "\n".join(lines))
         else:
-            send_telegram_message(chat_id, "❌ Не удалось получить данные.")
+            send_localized_message(chat_id, "no_data")
 
     elif command == "/news":
         news = get_latest_news()
         if news:
-            lines = ["📰 <b>Последние новости</b>\n"]
+            lang = get_user_language(chat_id)
+            texts = BOT_TEXTS.get(lang, BOT_TEXTS["ru"])
+            lines = [f"{texts['news_title']}\n"]
             for i, entry in enumerate(news, 1):
                 title = entry.title[:80] + "..." if len(entry.title) > 80 else entry.title
                 lines.append(f"{i}. <a href='{entry.link}'>{title}</a>\n")
             send_telegram_message(chat_id, "\n".join(lines))
         else:
-            send_telegram_message(chat_id, "❌ Не удалось загрузить новости.")
+            send_localized_message(chat_id, "no_news")
 
     elif command == "/fear":
         data = get_fear_greed()
@@ -409,13 +484,15 @@ def process_telegram_update(update: dict):
             elif value < 55: emoji = "😐"
             elif value < 75: emoji = "😊"
             else: emoji = "🤑"
-            send_telegram_message(chat_id, f"😨 <b>Индекс страха и жадности</b>\n\n{emoji} <b>{value}</b> — {classification}")
+            lang = get_user_language(chat_id)
+            texts = BOT_TEXTS.get(lang, BOT_TEXTS["ru"])
+            send_telegram_message(chat_id, f"{texts['fear_title']}\n\n{emoji} <b>{value}</b> — {classification}")
         else:
-            send_telegram_message(chat_id, "❌ Не удалось получить данные.")
+            send_localized_message(chat_id, "no_data")
 
     elif command == "/crypto_info":
         if len(parts) < 2:
-            send_telegram_message(chat_id, "❌ Укажите тикер: /crypto_info BTC")
+            send_localized_message(chat_id, "need_crypto_symbol")
             return
         symbol = parts[1].upper()
         data = get_crypto_info(symbol)
@@ -434,11 +511,12 @@ def process_telegram_update(update: dict):
 """
             send_telegram_message(chat_id, message)
         else:
+            send_localized_message(chat_id, "no_crypto_data", symbol=symbol)
             send_telegram_message(chat_id, f"❌ Не удалось найти данные для {symbol}.")
 
     elif command == "/stock_info":
         if len(parts) < 2:
-            send_telegram_message(chat_id, "❌ Укажите тикер: /stock_info AAPL")
+            send_localized_message(chat_id, "need_stock_symbol")
             return
         symbol = parts[1].upper()
         data = get_stock_info(symbol)
@@ -457,6 +535,7 @@ def process_telegram_update(update: dict):
 """
             send_telegram_message(chat_id, message)
         else:
+            send_localized_message(chat_id, "no_stock_data", symbol=symbol)
             send_telegram_message(chat_id, f"❌ Не удалось найти данные для {symbol}.")
 
     elif command == "/crypto":
@@ -486,22 +565,25 @@ def process_telegram_update(update: dict):
     elif command == "/status":
         user = get_user_by_chat_id(chat_id)
         if user:
-            send_telegram_message(chat_id, f"✅ Аккаунт привязан к <b>{user['username']}</b>")
+            send_localized_message(chat_id, "linked_status", username=user['username'])
         else:
-            send_telegram_message(chat_id, "❌ Аккаунт не привязан.")
+            send_localized_message(chat_id, "not_linked_status")
 
     elif command == "/unlink":
         unlink_telegram(chat_id)
-        send_telegram_message(chat_id, "✅ Аккаунт отвязан.")
+        send_localized_message(chat_id, "unlinked")
 
     # ===== КОД ПРИВЯЗКИ (6 ЦИФР) =====
     elif len(text) == 6 and text.isdigit():
         success, message = verify_telegram(chat_id, text)
-        send_telegram_message(chat_id, message)
+        if success:
+            send_localized_message(chat_id, "code_sent")
+        else:
+            send_localized_message(chat_id, "invalid_code")
 
     # ===== НЕИЗВЕСТНАЯ КОМАНДА =====
     else:
-        send_telegram_message(chat_id, "❓ Неизвестная команда. /help")
+        send_localized_message(chat_id, "unknown")
 
 # ============================================
 # POLLING
@@ -535,4 +617,4 @@ def init_bot():
 def send_login_notification(user_id: int, username: str, ip: str):
     chat_id = get_telegram_chat_id(user_id)
     if chat_id:
-        send_telegram_message(chat_id, f"🔐 <b>Вход в систему</b>\n\n👤 {username}\n🌐 {ip}\n🕐 {datetime.now().strftime('%H:%M:%S')}")
+        send_localized_message(chat_id, "login_notification", username=username, ip=ip, time=datetime.now().strftime('%H:%M:%S'))

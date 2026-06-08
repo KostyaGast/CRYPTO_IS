@@ -17,10 +17,10 @@ from database import place_order, get_portfolio, get_orders, get_balance, get_co
 st.set_page_config(page_title="Терминал | Crypto IS", page_icon="📈", layout="wide")
 
 # ============================================
-# КЭШИРОВАНИЕ ДЛЯ УСКОРЕНИЯ (ДОБАВЛЕНО)
+# КЭШИРОВАНИЕ ДЛЯ УСКОРЕНИЯ
 # ============================================
 
-@st.cache_data(ttl=10)  # Кэш на 10 секунд
+@st.cache_data(ttl=10)
 def get_cached_crypto_price(coin_id: str) -> float:
     """Кэшированное получение цены криптовалюты"""
     try:
@@ -58,25 +58,6 @@ def get_cached_stock_history(symbol: str, period: str = "7d") -> pd.DataFrame:
         return fetcher.get_data()
     except:
         return pd.DataFrame()
-
-@st.cache_data(ttl=10)
-def get_all_portfolio_prices(portfolio_items_hashable):
-    """Загрузить цены для всего портфеля за один вызов"""
-    prices = {}
-    for item in portfolio_items_hashable:
-        symbol = item['symbol']
-        # Определяем тип актива
-        is_crypto = any(symbol in c for c in config.SUPPORTED_COINS.values())
-        
-        if is_crypto:
-            coin_id = symbol.lower()
-            if coin_id in config.SUPPORTED_COINS.values():
-                prices[symbol] = get_cached_crypto_price(coin_id)
-            else:
-                prices[symbol] = get_cached_crypto_price("bitcoin")
-        else:
-            prices[symbol] = get_cached_stock_price(symbol)
-    return prices
 
 @st.cache_data(ttl=10)
 def get_ticker_data_cached():
@@ -132,6 +113,12 @@ if "terminal_balance" not in st.session_state:
     st.session_state.terminal_balance = get_balance(user["id"])
 if "last_update" not in st.session_state:
     st.session_state.last_update = datetime.now()
+if "quick_quantity" not in st.session_state:
+    st.session_state.quick_quantity = 0.0
+if "selected_symbol" not in st.session_state:
+    st.session_state.selected_symbol = None
+if "selected_asset_type" not in st.session_state:
+    st.session_state.selected_asset_type = None
 
 balance = st.session_state.terminal_balance
 
@@ -158,10 +145,6 @@ st.markdown("""
     @keyframes slideIn {
         from { transform: translateX(100%); opacity: 0; }
         to { transform: translateX(0); opacity: 1; }
-    }
-    @keyframes shimmer {
-        0% { background-position: -1000px 0; }
-        100% { background-position: 1000px 0; }
     }
     
     .stApp {
@@ -285,6 +268,36 @@ st.markdown("""
         box-shadow: 0 10px 20px rgba(247,147,26,0.3);
     }
     
+    .quick-trade-btn {
+        background: linear-gradient(135deg, #00ff88, #00cc66);
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 8px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    .quick-trade-btn:hover {
+        transform: scale(1.05);
+        box-shadow: 0 5px 15px rgba(0,255,136,0.3);
+    }
+    
+    .preset-btn {
+        background: rgba(247,147,26,0.2);
+        border: 1px solid #F7931A;
+        color: #F7931A;
+        padding: 5px 10px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: bold;
+        transition: all 0.2s ease;
+    }
+    .preset-btn:hover {
+        background: #F7931A;
+        color: white;
+    }
+    
     input, select, textarea {
         background: rgba(26, 28, 35, 0.8) !important;
         border: 1px solid rgba(247,147,26,0.3) !important;
@@ -314,6 +327,19 @@ st.markdown("""
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
     }
+    
+    .asset-selector {
+        background: rgba(247,147,26,0.1);
+        border-radius: 10px;
+        padding: 10px;
+        margin: 5px 0;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    .asset-selector:hover {
+        background: rgba(247,147,26,0.2);
+        transform: translateX(5px);
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -322,50 +348,6 @@ st.title("📈 Трейдинговый терминал")
 # ============================================
 # БЕГУЩАЯ СТРОКА (ТИКЕР)
 # ============================================
-def get_ticker_data():
-    """Получение данных для тикера"""
-    ticker_items = []
-    assets = [
-        ("BTC", "bitcoin"), ("ETH", "ethereum"), ("SOL", "solana"),
-        ("BNB", "binancecoin"), ("XRP", "ripple"), ("ADA", "cardano"),
-        ("AAPL", None, "stock"), ("TSLA", None, "stock"), ("NVDA", None, "stock"),
-        ("GOOGL", None, "stock"), ("MSFT", None, "stock")
-    ]
-    
-    for symbol, coin_id, *asset_type in assets:
-        try:
-            if coin_id:
-                fetcher = CryptoFetcher(coin_id, days=2)
-                data = fetcher.get_data()
-                if not data.empty:
-                    current_price = data['close'].iloc[-1]
-                    prev_price = data['close'].iloc[-2] if len(data) > 1 else current_price
-                    change = ((current_price - prev_price) / prev_price) * 100
-            else:
-                fetcher = StockFetcher(symbol, period="2d")
-                data = fetcher.get_data()
-                if not data.empty:
-                    current_price = data['close'].iloc[-1]
-                    prev_price = data['close'].iloc[-2] if len(data) > 1 else current_price
-                    change = ((current_price - prev_price) / prev_price) * 100
-                else:
-                    continue
-            
-            color_class = "up" if change >= 0 else "down"
-            arrow = "▲" if change >= 0 else "▼"
-            ticker_items.append(
-                f'<span class="ticker-item {color_class}">{symbol}: ${current_price:,.2f} '
-                f'{arrow} {abs(change):.2f}%</span>'
-            )
-        except Exception as e:
-            continue
-    
-    # Дублируем для непрерывной прокрутки
-    ticker_html = '<div class="ticker-container"><div class="ticker-wrap">'
-    ticker_html += ''.join(ticker_items * 2)
-    ticker_html += '</div></div>'
-    return ticker_html
-
 with st.spinner("Загрузка рыночных данных..."):
     ticker_html = get_ticker_data_cached()
     st.markdown(ticker_html, unsafe_allow_html=True)
@@ -385,7 +367,6 @@ portfolio_details = []
 
 for h in port:
     try:
-        # Определяем текущую цену (с кэшированием)
         if any(h["symbol"] in c for c in config.SUPPORTED_COINS.values()):
             coin_id = h["symbol"].lower()
             if coin_id in config.SUPPORTED_COINS.values():
@@ -458,25 +439,22 @@ with col_trades:
     """, unsafe_allow_html=True)
 
 with col_winrate:
-    # Расчет винрейта
     win_rate = 0
+    profitable_trades = 0
     if len(orders) > 1:
-        profitable_trades = 0
         buy_orders = {}
         for order in orders:
             if order["order_type"] == "buy":
                 key = f"{order['symbol']}_{order['timestamp']}"
                 buy_orders[key] = order
             elif order["order_type"] == "sell":
-                # Находим соответствующую покупку (упрощенно)
                 for buy_key, buy_order in buy_orders.items():
                     if buy_order["symbol"] == order["symbol"]:
                         profit = (order["price"] - buy_order["price"]) * order["quantity"]
                         if profit > 0:
                             profitable_trades += 1
                         break
-        if len(orders) > 0:
-            win_rate = (profitable_trades / (len(orders) / 2)) * 100 if len(orders) > 1 else 0
+        win_rate = (profitable_trades / (len(orders) / 2)) * 100 if len(orders) > 1 else 0
     
     win_color = "#00ff88" if win_rate >= 50 else "#ffaa00"
     st.markdown(f"""
@@ -486,7 +464,7 @@ with col_winrate:
             {win_rate:.1f}%
         </div>
         <div style="color: #888; font-size: 12px; margin-top: 10px;">
-            📈 Прибыльных сделок: {profitable_trades if 'profitable_trades' in locals() else 0}
+            📈 Прибыльных сделок: {profitable_trades}
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -514,7 +492,7 @@ with col_left:
         symbol = selected.split("(")[1].split(")")[0]
         coin_id = config.SUPPORTED_COINS[selected]
         try:
-            current_price = get_cached_crypto_price(coin_id)  # ← ИЗМЕНЕНО
+            current_price = get_cached_crypto_price(coin_id)
         except:
             current_price = 0
     elif asset_type == "Акции":
@@ -522,7 +500,7 @@ with col_left:
         selected = st.selectbox("Актив", names)
         symbol = WORLD_STOCKS[selected]
         try:
-            current_price = get_cached_stock_price(symbol)  # ← ИЗМЕНЕНО (упрощено)
+            current_price = get_cached_stock_price(symbol)
         except:
             current_price = 0
     else:
@@ -531,7 +509,7 @@ with col_left:
         selected = st.selectbox("Актив", names)
         symbol = all_futures[selected]
         try:
-            current_price = get_cached_stock_price(symbol)  # ← ИЗМЕНЕНО (упрощено)
+            current_price = get_cached_stock_price(symbol)
         except:
             current_price = 0
     
@@ -565,7 +543,47 @@ with col_left:
     </div>
     """, unsafe_allow_html=True)
     
-    quantity = st.number_input("Количество", min_value=0.0, step=0.01, format="%.4f")
+    # === ПРЕСЕТЫ ОБЪЁМОВ (как в Альфа-Инвестициях) ===
+    st.markdown("**📊 Быстрый выбор объёма:**")
+    col_pct1, col_pct2, col_pct3, col_pct4 = st.columns(4)
+    
+    max_buy_amount = balance / current_price if current_price > 0 else 0
+    
+    with col_pct1:
+        if st.button("25%", key="pct_25", use_container_width=True):
+            st.session_state.quick_quantity = max_buy_amount * 0.25
+            st.rerun()
+    with col_pct2:
+        if st.button("50%", key="pct_50", use_container_width=True):
+            st.session_state.quick_quantity = max_buy_amount * 0.5
+            st.rerun()
+    with col_pct3:
+        if st.button("75%", key="pct_75", use_container_width=True):
+            st.session_state.quick_quantity = max_buy_amount * 0.75
+            st.rerun()
+    with col_pct4:
+        if st.button("100%", key="pct_100", use_container_width=True):
+            st.session_state.quick_quantity = max_buy_amount
+            st.rerun()
+    
+    # Поле ввода количества
+    if st.session_state.quick_quantity > 0:
+        quantity = st.number_input(
+            "Количество", 
+            min_value=0.0, 
+            step=0.01, 
+            format="%.4f",
+            value=st.session_state.quick_quantity,
+            key="quantity_input"
+        )
+    else:
+        quantity = st.number_input(
+            "Количество", 
+            min_value=0.0, 
+            step=0.01, 
+            format="%.4f",
+            key="quantity_input"
+        )
     
     # Предварительный просмотр суммы сделки
     if quantity > 0:
@@ -588,8 +606,8 @@ with col_left:
                     place_order(user["id"], symbol, asset_type, current_price, quantity, "buy")
                     st.session_state.terminal_balance = get_balance(user["id"])
                     balance = st.session_state.terminal_balance
+                    st.session_state.quick_quantity = 0
                     
-                    # Анимация успеха
                     st.balloons()
                     st.success(f"""
                     ✅ Успешно куплено!
@@ -619,6 +637,7 @@ with col_left:
                         place_order(user["id"], symbol, asset_type, current_price, quantity, "sell")
                         st.session_state.terminal_balance = get_balance(user["id"])
                         balance = st.session_state.terminal_balance
+                        st.session_state.quick_quantity = 0
                         
                         profit = (current_price - holding["avg_price"]) * quantity
                         profit_text = f"📊 Прибыль: ${profit:+,.2f}" if profit != 0 else ""
@@ -637,7 +656,7 @@ with col_left:
     
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # Мини-график актива
+    # Мини-график актива с быстрой торговлей
     st.markdown('<div class="neon-card">', unsafe_allow_html=True)
     st.subheader(f"📉 {symbol} — Мини-график")
     
@@ -652,7 +671,6 @@ with col_left:
         if not df.empty and len(df) > 0:
             fig = go.Figure()
             
-            # Добавляем свечной график
             fig.add_trace(go.Candlestick(
                 x=df['date'], 
                 open=df['open'], 
@@ -665,7 +683,6 @@ with col_left:
                 showlegend=False
             ))
             
-            # Добавляем скользящие средние
             if len(df) > 20:
                 ma20 = df['close'].rolling(window=20).mean()
                 fig.add_trace(go.Scatter(
@@ -674,9 +691,21 @@ with col_left:
                     line=dict(color='#F7931A', width=1.5, dash='dash')
                 ))
             
+            # === БЫСТРАЯ ТОРГОВЛЯ С ГРАФИКА (линия текущей цены) ===
+            fig.add_hline(
+                y=current_price,
+                line_dash="dash",
+                line_color="#F7931A",
+                line_width=2,
+                opacity=0.8,
+                annotation_text=f"💰 ${current_price:,.2f}",
+                annotation_position="top right",
+                annotation_font=dict(color="#F7931A", size=11)
+            )
+            
             fig.update_layout(
                 template="plotly_dark", 
-                height=350, 
+                height=400, 
                 margin=dict(l=0, r=0, t=30, b=0),
                 xaxis_rangeslider_visible=False,
                 paper_bgcolor='rgba(0,0,0,0)',
@@ -687,6 +716,14 @@ with col_left:
             fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='rgba(255,255,255,0.1)')
             
             st.plotly_chart(fig, use_container_width=True)
+            
+            # Кнопки быстрой торговли под графиком
+            st.markdown("""
+            <div style="display: flex; gap: 10px; margin-top: 10px;">
+                <button onclick="alert('Быстрая покупка. Используйте форму слева для ввода количества')" style="background: linear-gradient(135deg, #00ff88, #00cc66); border: none; padding: 8px 20px; border-radius: 8px; color: white; font-weight: bold; cursor: pointer; flex: 1;">🚀 Быстрая покупка</button>
+                <button onclick="alert('Быстрая продажа. Используйте форму слева для ввода количества')" style="background: linear-gradient(135deg, #ff4444, #cc0000); border: none; padding: 8px 20px; border-radius: 8px; color: white; font-weight: bold; cursor: pointer; flex: 1;">⚡ Быстрая продажа</button>
+            </div>
+            """, unsafe_allow_html=True)
         else:
             st.info("📭 Нет данных для отображения графика")
     except Exception as e:
@@ -755,6 +792,27 @@ with col_right:
     st.subheader("📋 Детальный портфель")
     
     if portfolio_details:
+        # === БЫСТРЫЙ ВЫБОР АКТИВА (как в Альфа-Инвестициях) ===
+        st.markdown("#### 🔗 Быстрый выбор актива")
+        for asset in portfolio_details[:5]:
+            col_a, col_b, col_c = st.columns([3, 1, 1])
+            with col_a:
+                if st.button(f"📈 {asset['symbol']}", key=f"quick_select_{asset['symbol']}", use_container_width=True):
+                    st.session_state.selected_symbol = asset['symbol']
+                    # Определяем тип актива
+                    if any(asset['symbol'] in c for c in config.SUPPORTED_COINS.values()):
+                        st.session_state.selected_asset_type = "Криптовалюта"
+                    else:
+                        st.session_state.selected_asset_type = "Акции"
+                    st.rerun()
+            with col_b:
+                st.metric("", f"${asset['current_price']:,.2f}")
+            with col_c:
+                color = "🟢" if asset['pnl_pct'] >= 0 else "🔴"
+                st.markdown(f"<div style='text-align: right;'>{color} {asset['pnl_pct']:+.1f}%</div>", unsafe_allow_html=True)
+        
+        st.markdown("---")
+        
         # Создаем DataFrame для отображения
         df_portfolio = pd.DataFrame(portfolio_details)
         df_portfolio['value'] = df_portfolio['value'].apply(lambda x: f"${x:,.2f}")
@@ -822,14 +880,12 @@ with col_right:
     
     orders = get_orders(user["id"])
     if orders:
-        # Фильтры
         col_filter1, col_filter2 = st.columns(2)
         with col_filter1:
             filter_symbol = st.selectbox("🔍 Фильтр по активу", ["Все"] + list(set([o["symbol"] for o in orders])))
         with col_filter2:
             filter_type = st.selectbox("📊 Тип сделки", ["Все", "Покупки", "Продажи"])
         
-        # Применяем фильтры
         filtered_orders = orders
         if filter_symbol != "Все":
             filtered_orders = [o for o in filtered_orders if o["symbol"] == filter_symbol]
@@ -838,7 +894,6 @@ with col_right:
         elif filter_type == "Продажи":
             filtered_orders = [o for o in filtered_orders if o["order_type"] == "sell"]
         
-        # Экспорт данных
         if filtered_orders:
             df_orders = pd.DataFrame(filtered_orders)
             csv = df_orders.to_csv(index=False).encode('utf-8-sig')
@@ -850,7 +905,6 @@ with col_right:
                 use_container_width=True
             )
         
-        # Отображаем сделки
         for order in filtered_orders[:30]:
             order_class = "order-row-buy" if order["order_type"] == "buy" else "order-row-sell"
             emoji = "🟢" if order["order_type"] == "buy" else "🔴"
@@ -890,7 +944,6 @@ with col_right:
     if len(orders_all) > 1:
         df_analytics = pd.DataFrame(orders_all)
         
-        # Статистика по сделкам
         col_stat1, col_stat2, col_stat3 = st.columns(3)
         
         total_buy_volume = df_analytics[df_analytics["order_type"] == "buy"]["price"].sum() if not df_analytics[df_analytics["order_type"] == "buy"].empty else 0
@@ -916,10 +969,8 @@ with col_right:
             """, unsafe_allow_html=True)
         
         with col_stat3:
-            # Соотношение покупок и продаж
             buy_count = len(df_analytics[df_analytics["order_type"] == "buy"])
             sell_count = len(df_analytics[df_analytics["order_type"] == "sell"])
-            ratio = buy_count / sell_count if sell_count > 0 else buy_count
             st.markdown(f"""
             <div class="metric-card">
                 <div>🔄 Соотношение</div>
@@ -928,7 +979,6 @@ with col_right:
             </div>
             """, unsafe_allow_html=True)
         
-        # График активности по времени
         df_analytics['date'] = pd.to_datetime(df_analytics['timestamp']).dt.date
         daily_activity = df_analytics.groupby(['date', 'order_type']).size().unstack(fill_value=0)
         
@@ -956,7 +1006,6 @@ with col_right:
             )
             st.plotly_chart(fig_activity, use_container_width=True)
         
-        # Топ активов по объему торгов
         symbol_volume = df_analytics.groupby('symbol').apply(
             lambda x: (x['price'] * x['quantity']).sum()
         ).sort_values(ascending=False).head(5)
@@ -982,7 +1031,6 @@ with col_right:
             )
             st.plotly_chart(fig_top, use_container_width=True)
         
-        # Хитмап активности
         st.markdown("#### 🗺️ Тепловая карта активности")
         df_analytics['hour'] = pd.to_datetime(df_analytics['timestamp']).dt.hour
         df_analytics['day'] = pd.to_datetime(df_analytics['timestamp']).dt.day_name()
@@ -1079,6 +1127,8 @@ with col_nav4:
         📖 **Справка по терминалу:**
         
         • **Покупка/продажа**: Выберите актив, укажите количество и нажмите соответствующую кнопку
+        • **Быстрый выбор объёма**: Кнопки 25%, 50%, 75%, 100% от доступного баланса
+        • **Быстрый выбор актива**: Кликните на актив в портфеле для быстрого переключения
         • **Алерты**: Установите уведомления при достижении определенной цены
         • **Аналитика**: Изучайте статистику своих сделок
         • **Экспорт**: Скачивайте историю сделок в CSV формате

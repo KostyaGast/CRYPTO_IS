@@ -58,8 +58,10 @@ def init_database():
         cursor.execute("ALTER TABLE users ADD COLUMN email TEXT")
     if 'yandex_id' not in columns:
         cursor.execute("ALTER TABLE users ADD COLUMN yandex_id TEXT")
+    if 'language' not in columns:  # ← ДОБАВИТЬ ЭТО
+        cursor.execute("ALTER TABLE users ADD COLUMN language TEXT DEFAULT 'ru'")
     
-    # Таблица для баланса (ДОБАВЛЯЕМ)
+    # Таблица для баланса
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS user_balance (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -74,7 +76,6 @@ def init_database():
     
     conn.commit()
     conn.close()
-
 def hash_password(password: str) -> str:
     """Хеширование пароля SHA-256."""
     return hashlib.sha256(password.encode()).hexdigest()
