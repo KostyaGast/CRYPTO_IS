@@ -795,7 +795,62 @@ def get_balance(user_id: int) -> float:
         conn.commit()
         conn.close()
         return 1000000.0
+# ============================================
+# ФУНКЦИИ ДЛЯ АЛЕРТОВ
+# ============================================
 
+def get_user_alerts(user_id: int, active_only: bool = True):
+    """Получить все алерты пользователя"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    # Создаём таблицу, если ещё нет
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS price_alerts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            symbol TEXT NOT NULL,
+            condition TEXT NOT NULL,
+            price REAL NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            active INTEGER DEFAULT 1,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+    """)
+    
+    query = "SELECT * FROM price_alerts WHERE user_id = ?"
+    if active_only:
+        query += " AND active = 1"
+    query += " ORDER BY created_at DESC"
+    
+    cursor.execute(query, (user_id,))
+    alerts = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return alerts
+
+def delete_alert(alert_id: int, user_id: int) -> bool:
+    """Удалить алерт"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "DELETE FROM price_alerts WHERE id = ? AND user_id = ?",
+        (alert_id, user_id)
+    )
+    conn.commit()
+    conn.close()
+    return True
+
+def deactivate_alert(alert_id: int, user_id: int) -> bool:
+    """Деактивировать алерт"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE price_alerts SET active = 0 WHERE id = ? AND user_id = ?",
+        (alert_id, user_id)
+    )
+    conn.commit()
+    conn.close()
+    return True
 # Инициализация
 init_history_tables()
 init_trading_tables()
