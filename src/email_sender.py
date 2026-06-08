@@ -35,7 +35,7 @@ def send_reset_code(to_email: str, code: str) -> bool:
         return False
     
     try:
-        yag = yagmail.SMTP(GMAIL_USER, GMAIL_PASSWORD)
+        yag = yagmail.SMTP(GMAIL_USER, GMAIL_PASSWORD, host='smtp.gmail.com', port=587)
         
         subject = "🔐 Crypto IS - Восстановление пароля"
         contents = f"""
