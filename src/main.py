@@ -399,16 +399,15 @@ def auth_screen():
     </div>
     """, unsafe_allow_html=True)
     
-    if USE_GOOGLE_AUTH:
-        tab1, tab2, tab3 = st.tabs([t["login_email"], "🚀 Google", t["register"]])
-    else:
+    # Две колонки: форма входа/регистрации и Google
+    col_left, col_right = st.columns([2, 1])
+    
+    with col_left:
+        # Вкладки для Email/Пароль и Регистрация
         tab1, tab2 = st.tabs([t["login_email"], t["register"]])
-
-    # ===== ВКЛАДКА 1: Email/Пароль =====
-    with tab1:
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            st.markdown("### " + t["login_email"])
+        
+        # ===== ВКЛАДКА 1: Email/Пароль =====
+        with tab1:
             username = st.text_input("Логин или Email", key="login_username")
             password = st.text_input("Пароль", type="password", key="login_password")
             
@@ -454,27 +453,9 @@ def auth_screen():
                 if st.button(t["forgot"], use_container_width=True):
                     st.session_state["show_reset"] = True
                     st.rerun()
-
-    # ===== ВКЛАДКА 2: Google (только если USE_GOOGLE_AUTH) =====
-    if USE_GOOGLE_AUTH:
+        
+        # ===== ВКЛАДКА 2: Регистрация =====
         with tab2:
-            col1, col2, col3 = st.columns([1, 2, 1])
-            with col2:
-                st.markdown("### Вход через Google")
-                st.markdown("""
-                <div style="text-align: center; padding: 20px;">
-                    <p>Используйте ваш Google аккаунт для быстрого входа</p>
-                </div>
-                """, unsafe_allow_html=True)
-                if st.button("🚀 Войти через Google", use_container_width=True, type="primary"):
-                    st.login("google")
-
-    # ===== ВКЛАДКА 3 (или 2): Регистрация =====
-    reg_tab = tab3 if USE_GOOGLE_AUTH else tab2
-    with reg_tab:
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            st.markdown("### " + t["register"])
             new_username = st.text_input("Логин", key="reg_username")
             new_email = st.text_input("Email (опционально)", key="reg_email")
             new_password = st.text_input("Пароль", type="password", key="reg_password")
@@ -503,7 +484,33 @@ def auth_screen():
                     else:
                         st.error(message)
     
-    # Сброс пароля
+    with col_right:
+        # ===== ВХОД ЧЕРЕЗ GOOGLE =====
+        if USE_GOOGLE_AUTH:
+            st.markdown("""
+            <div style="text-align: center; padding: 20px; border-left: 1px solid #333;">
+                <h3 style="margin-bottom: 20px;">🚀 Быстрый вход</h3>
+                <p style="color: #aaa; font-size: 14px;">Используйте ваш Google аккаунт</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            if st.button("🚀 Войти через Google", use_container_width=True, type="primary"):
+                import webbrowser
+                auth_url = "https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=495761628775-pavraj5po9ggfi5itgp1ga67i4s15qij.apps.googleusercontent.com&redirect_uri=http://localhost:8501/oauth2callback&scope=openid%20email%20profile&access_type=offline"
+                webbrowser.open(auth_url)
+                st.success("Откроется окно Google. После входа скопируйте код из адресной строки")
+                
+                code = st.text_input("Вставьте код сюда:")
+                if code:
+                    st.success(f"Код получен! Дальше обработаем...")
+            
+            st.markdown("""
+            <div style="text-align: center; margin-top: 20px;">
+                <p style="color: #666; font-size: 12px;">✅ Без регистрации<br>✅ Без пароля<br>✅ В один клик</p>
+            </div>
+            """, unsafe_allow_html=True)
+    
+    # Сброс пароля (остаётся без изменений)
     if st.session_state.get("show_reset", False):
         st.markdown("---")
         col1, col2, col3 = st.columns([1, 2, 1])
