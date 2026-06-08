@@ -20,7 +20,7 @@ st.set_page_config(page_title="Терминал | Crypto IS", page_icon="📈", 
 # КЭШИРОВАНИЕ ДЛЯ УСКОРЕНИЯ
 # ============================================
 
-@st.cache_data(ttl=10)
+@st.cache_data(ttl=10, show_spinner=False)
 def get_cached_crypto_price(coin_id: str) -> float:
     """Кэшированное получение цены криптовалюты"""
     try:
@@ -29,7 +29,7 @@ def get_cached_crypto_price(coin_id: str) -> float:
     except:
         return 0.0
 
-@st.cache_data(ttl=10)
+@st.cache_data(ttl=10, show_spinner=False)
 def get_cached_stock_price(symbol: str) -> float:
     """Кэшированное получение цены акции"""
     try:
@@ -41,7 +41,7 @@ def get_cached_stock_price(symbol: str) -> float:
     except:
         return 0.0
 
-@st.cache_data(ttl=30)
+@st.cache_data(ttl=30, show_spinner=False)
 def get_cached_crypto_history(coin_id: str, days: int = 7) -> pd.DataFrame:
     """Кэшированное получение истории криптовалюты"""
     try:
@@ -50,7 +50,7 @@ def get_cached_crypto_history(coin_id: str, days: int = 7) -> pd.DataFrame:
     except:
         return pd.DataFrame()
 
-@st.cache_data(ttl=30)
+@st.cache_data(ttl=30, show_spinner=False)
 def get_cached_stock_history(symbol: str, period: str = "7d") -> pd.DataFrame:
     """Кэшированное получение истории акции"""
     try:
@@ -59,7 +59,7 @@ def get_cached_stock_history(symbol: str, period: str = "7d") -> pd.DataFrame:
     except:
         return pd.DataFrame()
 
-@st.cache_data(ttl=10)
+@st.cache_data(ttl=10, show_spinner=False)
 def get_ticker_data_cached():
     """Кэшированное получение данных для бегущей строки"""
     ticker_items = []
