@@ -493,19 +493,6 @@ def auth_screen():
                 <p style="color: #aaa; font-size: 14px;">Используйте ваш Google аккаунт</p>
             </div>
             """, unsafe_allow_html=True)
-            
-            if st.button("🚀 Войти через Google", use_container_width=True, type="primary"):
-                import webbrowser
-                auth_url = "https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=495761628775-pavraj5po9ggfi5itgp1ga67i4s15qij.apps.googleusercontent.com&redirect_uri=http://localhost:8501/oauth2callback&scope=openid%20email%20profile&access_type=offline&prompt=select_account"
-                webbrowser.open(auth_url)
-                st.info("✅ Откроется новое окно браузера. Войдите в Google и скопируйте код из адресной строки.")
-                
-                code = st.text_input("📋 Вставьте код сюда:")
-                if code:
-                    st.success(f"Код получен: {code[:20]}...")
-                    st.session_state["google_code"] = code
-                    st.rerun()
-            
             st.markdown("""
             <div style="text-align: center; margin-top: 20px;">
                 <p style="color: #666; font-size: 12px;">✅ Без регистрации<br>✅ Без пароля<br>✅ В один клик</p>
