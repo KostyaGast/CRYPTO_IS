@@ -484,21 +484,6 @@ def auth_screen():
                     else:
                         st.error(message)
     
-    with col_right:
-        # ===== ВХОД ЧЕРЕЗ GOOGLE =====
-        if USE_GOOGLE_AUTH:
-            st.markdown("""
-            <div style="text-align: center; padding: 20px; border-left: 1px solid #333;">
-                <h3 style="margin-bottom: 20px;">🚀 Быстрый вход</h3>
-                <p style="color: #aaa; font-size: 14px;">Используйте ваш Google аккаунт</p>
-            </div>
-            """, unsafe_allow_html=True)
-            st.markdown("""
-            <div style="text-align: center; margin-top: 20px;">
-                <p style="color: #666; font-size: 12px;">✅ Без регистрации<br>✅ Без пароля<br>✅ В один клик</p>
-            </div>
-            """, unsafe_allow_html=True)
-    
     # Сброс пароля (остаётся без изменений)
     if st.session_state.get("show_reset", False):
         st.markdown("---")
