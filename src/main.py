@@ -609,6 +609,43 @@ with st.sidebar:
         "📅 Период",
         ["1 день", "7 дней", "14 дней", "30 дней", "Своя дата"]
     )
+
+    # ===== БЫСТРЫЕ КНОПКИ =====
+    st.markdown("**⚡ Быстрый выбор:**")
+    col_q1, col_q2, col_q3, col_q4 = st.columns(4)
+    
+    with col_q1:
+        if st.button("📆 Прошлая неделя", use_container_width=True):
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=14)
+            days = 14
+            period_option = "Своя дата"
+            st.rerun()
+    
+    with col_q2:
+        if st.button("📅 Прошлый месяц", use_container_width=True):
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=60)
+            days = 60
+            period_option = "Своя дата"
+            st.rerun()
+    
+    with col_q3:
+        if st.button("🗓️ Этот год", use_container_width=True):
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=365)
+            days = 365
+            period_option = "Своя дата"
+            st.rerun()
+    
+    with col_q4:
+        if st.button("📊 Максимум", use_container_width=True):
+            end_date = datetime.now()
+            start_date = datetime(2020, 1, 1)
+            days = 9999
+            period_option = "Своя дата"
+            st.rerun()
+
     if period_option == "Своя дата":
         col1, col2 = st.columns(2)
         with col1: start_date = st.date_input("С", value=datetime.now() - timedelta(days=30))
