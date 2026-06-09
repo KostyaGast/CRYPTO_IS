@@ -593,12 +593,24 @@ def start_polling():
     if not BOT_TOKEN:
         print("❌ BOT_TOKEN не настроен")
         return
+    
     print("✅ Бот слушает...")
+    
+    # Добавляем поддержку прокси
+    PROXY_URL = os.getenv("TELEGRAM_PROXY", None)
+    if PROXY_URL:
+        print(f"🔧 Используется прокси: {PROXY_URL}")
+    
     offset = 0
     while True:
         try:
+            # Используем прокси для запросов
+            proxies = {"http": PROXY_URL, "https": PROXY_URL} if PROXY_URL else None
+            
             url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates"
-            data = requests.get(url, params={"timeout": 30, "offset": offset}, timeout=35).json()
+            response = requests.get(url, params={"timeout": 30, "offset": offset}, timeout=35, proxies=proxies)
+            data = response.json()
+            
             if data.get("ok") and data.get("result"):
                 for update in data["result"]:
                     process_telegram_update(update)
@@ -613,8 +625,3 @@ def init_bot():
         print("✅ Бот запущен в фоне")
     else:
         print("❌ Бот не настроен")
-
-def send_login_notification(user_id: int, username: str, ip: str):
-    chat_id = get_telegram_chat_id(user_id)
-    if chat_id:
-        send_localized_message(chat_id, "login_notification", username=username, ip=ip, time=datetime.now().strftime('%H:%M:%S'))
