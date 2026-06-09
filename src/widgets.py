@@ -5,13 +5,60 @@ import streamlit as st
 import requests
 import pandas as pd
 
+# Поддержка языков (передаётся из main.py)
+def get_text(key, lang="ru"):
+    texts = {
+        "ru": {
+            "market_activity": "📊 Активность рынка ({})",
+            "no_data": "Не удалось загрузить данные",
+            "select_asset": "Выберите актив",
+            "volume": "Объём: {:,}",
+            "what_mean": "ℹ️ Что это значит?",
+            "current_volume_pct": "Текущий объём составляет <b>{:.1f}%</b> от среднего за 20 дней.",
+            "top_crypto": "🚀 Топ криптовалюты",
+            "top_crypto_sub": "По рыночной капитализации",
+            "why_these": "ℹ️ Почему именно они?",
+            "btc_desc": "цифровое золото, самый надёжный актив",
+            "eth_desc": "платформа для децентрализованных приложений",
+            "bnb_desc": "токен крупнейшей криптобиржи, используется для скидок",
+        },
+        "en": {
+            "market_activity": "📊 Market Activity ({})",
+            "no_data": "Failed to load data",
+            "select_asset": "Select asset",
+            "volume": "Volume: {:,}",
+            "what_mean": "ℹ️ What does it mean?",
+            "current_volume_pct": "Current volume is <b>{:.1f}%</b> of the 20-day average.",
+            "top_crypto": "🚀 Top Cryptocurrencies",
+            "top_crypto_sub": "By market capitalization",
+            "why_these": "ℹ️ Why these?",
+            "btc_desc": "digital gold, the most reliable asset",
+            "eth_desc": "platform for decentralized applications",
+            "bnb_desc": "token of the largest crypto exchange, used for discounts",
+        },
+        "zh": {
+            "market_activity": "📊 市场活动 ({})",
+            "no_data": "无法加载数据",
+            "select_asset": "选择资产",
+            "volume": "交易量: {:,}",
+            "what_mean": "ℹ️ 这意味着什么？",
+            "current_volume_pct": "当前交易量是20天平均值的<b>{:.1f}%</b>。",
+            "top_crypto": "🚀 顶级加密货币",
+            "top_crypto_sub": "按市值排名",
+            "why_these": "ℹ️ 为什么是它们？",
+            "btc_desc": "数字黄金，最可靠的资产",
+            "eth_desc": "去中心化应用平台",
+            "bnb_desc": "最大加密货币交易所的代币，用于折扣",
+        }
+    }
+    return texts.get(lang, texts["ru"]).get(key, key)
+
 @st.cache_data(ttl=300)
 def fetch_crypto_activity(symbol: str):
     """Анализирует активность по криптовалюте на основе объёма торгов."""
     if not symbol:
         return None
     try:
-        # ПОЛНЫЙ маппинг тикера в ID CoinGecko
         crypto_map = {
             "BTC": "bitcoin", "ETH": "ethereum", "BNB": "binancecoin", "SOL": "solana",
             "ADA": "cardano", "XRP": "ripple", "DOGE": "dogecoin", "DOT": "polkadot",
@@ -21,8 +68,6 @@ def fetch_crypto_activity(symbol: str):
         }
         coin_id = crypto_map.get(symbol.upper(), symbol.lower())
         
-        # Используем /ohlc для получения свечей (там нет объёма)
-        # И /market_chart для объёма с параметром interval=daily
         response = requests.get(
             f"https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart",
             params={"vs_currency": "usd", "days": 30, "interval": "daily"},
@@ -30,18 +75,14 @@ def fetch_crypto_activity(symbol: str):
         )
         data = response.json()
         
-        # Пробуем разные ключи для объёмов
         volumes = data.get("total_volumes", [])
         if not volumes:
-            # Альтернативный ключ
             volumes = data.get("volumes", [])
         
         if not volumes or len(volumes) < 5:
-            # Если всё равно нет — используем заглушку на основе цен
             prices = data.get("prices", [])
             if len(prices) < 5:
                 return None
-            # Симулируем объём на основе волатильности цены
             recent_prices = [p[1] for p in prices[-20:]]
             avg_price = sum(recent_prices) / len(recent_prices)
             volatility = sum(abs(p - avg_price) for p in recent_prices) / len(recent_prices)
@@ -49,7 +90,6 @@ def fetch_crypto_activity(symbol: str):
             avg_volume = volatility * 800
             ratio = (current_volume / avg_volume) * 100 if avg_volume > 0 else 100
         else:
-            # Нормальный расчёт по объёмам
             recent_volumes = [v[1] for v in volumes[-20:]]
             current_volume = recent_volumes[-1]
             avg_volume = sum(recent_volumes) / len(recent_volumes)
@@ -146,12 +186,10 @@ def fetch_top_crypto():
     except:
         return None
 
-def fear_greed_widget(asset_type="crypto", symbol=None):
-    """
-    Контекстный виджет активности.
-    asset_type: 'crypto' или 'stocks'
-    symbol: тикер актива
-    """
+def fear_greed_widget(asset_type="crypto", symbol=None, lang="ru"):
+    """Контекстный виджет активности."""
+    t = get_text(lang)
+    
     if asset_type == "Криптовалюта" or asset_type == "crypto":
         if symbol:
             data = fetch_crypto_activity(symbol)
@@ -164,19 +202,19 @@ def fear_greed_widget(asset_type="crypto", symbol=None):
 
                 st.markdown(f"""
                 <div style="background: #1a1c23; border-radius: 10px; padding: 15px; margin-bottom: 10px;">
-                    <h4 style="margin: 0 0 10px 0;">📊 Активность рынка ({symbol})</h4>
+                    <h4 style="margin: 0 0 10px 0;">{t['market_activity'].format(symbol)}</h4>
                     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
                         <span style="font-size: 32px;">{emoji}</span>
                         <div style="flex: 1;">
                             <div style="font-size: 20px; font-weight: bold; color: #aaa;">{data['status']}</div>
-                            <div style="color: #aaa; font-size: 12px;">Объём: {data['current_volume']:,.0f}</div>
+                            <div style="color: #aaa; font-size: 12px;">{t['volume'].format(int(data['current_volume']))}</div>
                         </div>
                     </div>
                     <details>
-                        <summary style="color: #888; font-size: 12px; cursor: pointer;">ℹ️ Что это значит?</summary>
+                        <summary style="color: #888; font-size: 12px; cursor: pointer;">{t['what_mean']}</summary>
                         <p style="color: #aaa; font-size: 12px; margin-top: 8px; padding: 8px; background: #0e1117; border-radius: 5px;">
                         {data['advice']}<br><br>
-                        Текущий объём составляет <b>{data['ratio']:.1f}%</b> от среднего за 20 дней.
+                        {t['current_volume_pct'].format(data['ratio'])}
                         </p>
                     </details>
                 </div>
@@ -184,15 +222,15 @@ def fear_greed_widget(asset_type="crypto", symbol=None):
             else:
                 st.markdown(f"""
                 <div style="background: #1a1c23; border-radius: 10px; padding: 15px; margin-bottom: 10px;">
-                    <h4 style="margin: 0 0 10px 0;">📊 Активность рынка ({symbol})</h4>
-                    <div style="color: #aaa;">Не удалось загрузить данные</div>
+                    <h4 style="margin: 0 0 10px 0;">{t['market_activity'].format(symbol)}</h4>
+                    <div style="color: #aaa;">{t['no_data']}</div>
                 </div>
                 """, unsafe_allow_html=True)
         else:
-            st.markdown("""
+            st.markdown(f"""
             <div style="background: #1a1c23; border-radius: 10px; padding: 15px; margin-bottom: 10px;">
-                <h4 style="margin: 0 0 10px 0;">📊 Активность рынка</h4>
-                <div style="color: #aaa;">Выберите криптовалюту</div>
+                <h4 style="margin: 0 0 10px 0;">{t['market_activity'].format('')}</h4>
+                <div style="color: #aaa;">{t['select_asset']}</div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -208,19 +246,19 @@ def fear_greed_widget(asset_type="crypto", symbol=None):
 
                 st.markdown(f"""
                 <div style="background: #1a1c23; border-radius: 10px; padding: 15px; margin-bottom: 10px;">
-                    <h4 style="margin: 0 0 10px 0;">📊 Активность рынка ({symbol})</h4>
+                    <h4 style="margin: 0 0 10px 0;">{t['market_activity'].format(symbol)}</h4>
                     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
                         <span style="font-size: 32px;">{emoji}</span>
                         <div style="flex: 1;">
                             <div style="font-size: 20px; font-weight: bold; color: #aaa;">{data['status']}</div>
-                            <div style="color: #aaa; font-size: 12px;">Объём: {data['current_volume']:,.0f}</div>
+                            <div style="color: #aaa; font-size: 12px;">{t['volume'].format(int(data['current_volume']))}</div>
                         </div>
                     </div>
                     <details>
-                        <summary style="color: #888; font-size: 12px; cursor: pointer;">ℹ️ Что это значит?</summary>
+                        <summary style="color: #888; font-size: 12px; cursor: pointer;">{t['what_mean']}</summary>
                         <p style="color: #aaa; font-size: 12px; margin-top: 8px; padding: 8px; background: #0e1117; border-radius: 5px;">
                         {data['advice']}<br><br>
-                        Текущий объём составляет <b>{data['ratio']:.1f}%</b> от среднего за 20 дней.
+                        {t['current_volume_pct'].format(data['ratio'])}
                         </p>
                     </details>
                 </div>
@@ -228,35 +266,36 @@ def fear_greed_widget(asset_type="crypto", symbol=None):
             else:
                 st.markdown(f"""
                 <div style="background: #1a1c23; border-radius: 10px; padding: 15px; margin-bottom: 10px;">
-                    <h4 style="margin: 0 0 10px 0;">📊 Активность рынка ({symbol})</h4>
-                    <div style="color: #aaa;">Не удалось загрузить данные</div>
+                    <h4 style="margin: 0 0 10px 0;">{t['market_activity'].format(symbol)}</h4>
+                    <div style="color: #aaa;">{t['no_data']}</div>
                 </div>
                 """, unsafe_allow_html=True)
         else:
-            st.markdown("""
+            st.markdown(f"""
             <div style="background: #1a1c23; border-radius: 10px; padding: 15px; margin-bottom: 10px;">
-                <h4 style="margin: 0 0 10px 0;">📊 Активность рынка</h4>
-                <div style="color: #aaa;">Выберите акцию</div>
+                <h4 style="margin: 0 0 10px 0;">{t['market_activity'].format('')}</h4>
+                <div style="color: #aaa;">{t['select_asset']}</div>
             </div>
             """, unsafe_allow_html=True)
 
-def top_crypto_widget():
+def top_crypto_widget(lang="ru"):
     """Виджет топ-3 криптовалют с объяснением."""
+    t = get_text(lang)
     data = fetch_top_crypto()
     
     if data:
         st.markdown(f"""
         <div style="background: #1a1c23; border-radius: 10px; padding: 15px;">
-            <h4 style="margin: 0 0 10px 0;">🚀 Топ криптовалюты</h4>
+            <h4 style="margin: 0 0 10px 0;">{t['top_crypto']}</h4>
             <p style="color: #888; font-size: 11px; margin-bottom: 10px;">
-            По рыночной капитализации
+                {t['top_crypto_sub']}
             </p>
         """, unsafe_allow_html=True)
         
         coins = [
-            ("₿ Bitcoin", data.get("bitcoin", {}), "#F7931A", "Первая и главная криптовалюта"),
-            ("💎 Ethereum", data.get("ethereum", {}), "#627EEA", "Смарт-контракты и DeFi"),
-            ("🟡 BNB", data.get("binancecoin", {}), "#F0B90B", "Токен биржи Binance")
+            ("₿ Bitcoin", data.get("bitcoin", {}), "#F7931A", t['btc_desc']),
+            ("💎 Ethereum", data.get("ethereum", {}), "#627EEA", t['eth_desc']),
+            ("🟡 BNB", data.get("binancecoin", {}), "#F0B90B", t['bnb_desc'])
         ]
         
         for name, coin_data, color, description in coins:
@@ -274,22 +313,22 @@ def top_crypto_widget():
             </div>
             """, unsafe_allow_html=True)
         
-        st.markdown("""
+        st.markdown(f"""
             <details>
-                <summary style="color: #888; font-size: 12px; cursor: pointer;">ℹ️ Почему именно они?</summary>
+                <summary style="color: #888; font-size: 12px; cursor: pointer;">{t['why_these']}</summary>
                 <p style="color: #aaa; font-size: 12px; margin-top: 8px; padding: 8px; background: #0e1117; border-radius: 5px;">
-                <b>Bitcoin (BTC)</b> — цифровое золото, самый надёжный актив<br>
-                <b>Ethereum (ETH)</b> — платформа для децентрализованных приложений<br>
-                <b>BNB</b> — токен крупнейшей криптобиржи, используется для скидок
+                <b>Bitcoin (BTC)</b> — {t['btc_desc']}<br>
+                <b>Ethereum (ETH)</b> — {t['eth_desc']}<br>
+                <b>BNB</b> — {t['bnb_desc']}
                 </p>
             </details>
         </div>
         """, unsafe_allow_html=True)
     else:
-        st.markdown("""
+        st.markdown(f"""
         <div style="background: #1a1c23; border-radius: 10px; padding: 15px;">
-            <h4 style="margin: 0 0 10px 0;">🚀 Топ криптовалюты</h4>
-            <div style="color: #aaa;">Не удалось загрузить данные</div>
+            <h4 style="margin: 0 0 10px 0;">{t['top_crypto']}</h4>
+            <div style="color: #aaa;">{t['no_data']}</div>
         </div>
         """, unsafe_allow_html=True)
 
