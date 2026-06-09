@@ -610,62 +610,14 @@ with st.sidebar:
         ["1 день", "7 дней", "14 дней", "30 дней", "Своя дата"]
     )
 
-    # ===== БЫСТРЫЕ КНОПКИ =====
-    st.markdown("**⚡ Быстрый выбор:**")
-    col_q1, col_q2, col_q3, col_q4 = st.columns(4)
-    
-    with col_q1:
-        if st.button("📆 Прошлая неделя"):
-            # 26 мая - 2 июня (условно)
-            st.session_state.custom_start = datetime(2026, 5, 25)
-            st.session_state.custom_end = datetime(2026, 5, 31)
-            st.session_state.use_custom = True
-            st.rerun()
-    
-    with col_q2:
-        if st.button("📅 Прошлый месяц"):
-            # 9 апреля - 9 мая (условно)
-            st.session_state.custom_start = datetime(2026, 4, 9)
-            st.session_state.custom_end = datetime(2026, 5, 9)
-            st.session_state.use_custom = True
-            st.rerun()
-    
-    with col_q3:
-        if st.button("🗓️ Этот год"):
-            st.session_state.custom_start = datetime(2026, 1, 1)
-            st.session_state.custom_end = datetime.now()
-            st.session_state.use_custom = True
-            st.rerun()
-    
-    with col_q4:
-        if st.button("📊 Максимум"):
-            st.session_state.custom_start = datetime(2020, 1, 1)
-            st.session_state.custom_end = datetime.now()
-            st.session_state.use_custom = True
-            st.rerun()
-
-    # Инициализация
-    if "custom_start" not in st.session_state:
-        st.session_state.custom_start = datetime.now() - timedelta(days=30)
-    if "custom_end" not in st.session_state:
-        st.session_state.custom_end = datetime.now()
-    if "use_custom" not in st.session_state:
-        st.session_state.use_custom = False
-
-    if period_option == "Своя дата" or st.session_state.use_custom:
-        start_date = st.date_input("С", value=st.session_state.custom_start)
-        end_date = st.date_input("По", value=st.session_state.custom_end)
+    if period_option == "Своя дата":
+        col1, col2 = st.columns(2)
+        with col1: start_date = st.date_input("С", value=datetime.now() - timedelta(days=30))
+        with col2: end_date = st.date_input("По", value=datetime.now())
         days = (end_date - start_date).days
-        if days < 1:
-            days = 1
-        st.session_state.custom_start = start_date
-        st.session_state.custom_end = end_date
-        st.session_state.use_custom = True
+        if days < 1: days = 1
     else:
         days = int(period_option.split()[0])
-        st.session_state.custom_start = datetime.now() - timedelta(days=days)
-        st.session_state.custom_end = datetime.now()
-        st.session_state.use_custom = False
 
     refresh = st.button(t["refresh"], use_container_width=True)
     st.markdown("---")
