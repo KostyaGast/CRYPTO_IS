@@ -610,38 +610,44 @@ with st.sidebar:
         ["1 день", "7 дней", "14 дней", "30 дней", "Своя дата"]
     )
 
-    # ===== БЫСТРЫЕ КНОПКИ =====
+        # ===== БЫСТРЫЕ КНОПКИ =====
     st.markdown("**⚡ Быстрый выбор:**")
     col_q1, col_q2, col_q3, col_q4 = st.columns(4)
     
-    # Обработка кнопок через session_state
     if "custom_start" not in st.session_state:
         st.session_state.custom_start = datetime.now() - timedelta(days=30)
     if "custom_end" not in st.session_state:
         st.session_state.custom_end = datetime.now()
     
+    today = datetime.now()
+    
     with col_q1:
         if st.button("📆 Прошлая неделя"):
-            st.session_state.custom_start = datetime.now() - timedelta(days=7)
-            st.session_state.custom_end = datetime.now()
+            # Последняя ПОЛНАЯ неделя (пн-вс или просто сдвиг)
+            st.session_state.custom_end = today - timedelta(days=today.weekday() + 1)  # последнее воскресенье
+            st.session_state.custom_start = st.session_state.custom_end - timedelta(days=7)
             st.session_state.period_override = "Своя дата"
     
     with col_q2:
         if st.button("📅 Прошлый месяц"):
-            st.session_state.custom_start = datetime.now() - timedelta(days=30)
-            st.session_state.custom_end = datetime.now()
+            # Первый день предыдущего месяца по последний день предыдущего месяца
+            first_of_this_month = today.replace(day=1)
+            last_of_prev_month = first_of_this_month - timedelta(days=1)
+            first_of_prev_month = last_of_prev_month.replace(day=1)
+            st.session_state.custom_start = first_of_prev_month
+            st.session_state.custom_end = last_of_prev_month
             st.session_state.period_override = "Своя дата"
     
     with col_q3:
         if st.button("🗓️ Этот год"):
-            st.session_state.custom_start = datetime.now() - timedelta(days=365)
-            st.session_state.custom_end = datetime.now()
+            st.session_state.custom_start = datetime(today.year, 1, 1)
+            st.session_state.custom_end = today
             st.session_state.period_override = "Своя дата"
     
     with col_q4:
         if st.button("📊 Максимум"):
             st.session_state.custom_start = datetime(2020, 1, 1)
-            st.session_state.custom_end = datetime.now()
+            st.session_state.custom_end = today
             st.session_state.period_override = "Своя дата"
 
     # Определяем период
