@@ -94,7 +94,13 @@ translations = {
         "forgot": "🔑 Забыли пароль?",
         "footer": "© 2026 Crypto IS — Информационная система мировых финансов",
         "info_box": "📋 Алгоритм работы",
-        "info_text": "Данные с CoinGecko API • Только будние дни (ПН-ПТ) • Кэширование на 1 час"
+        "info_text": "Данные с CoinGecko API • Только будние дни (ПН-ПТ) • Кэширование на 1 час",
+        "widgets": "📊 Виджеты",
+        "show_widgets": "Показывать виджеты",
+        "refresh_widgets": "🔄 Обновить виджеты",
+        "telegram": "📱 Telegram",
+        "telegram_open": "🚀 Открыть бота в Telegram",
+        "telegram_caption": "Получайте уведомления о входах и алерты"
     },
     "en": {
         "title": "📊 Crypto IS",
@@ -128,7 +134,13 @@ translations = {
         "forgot": "🔑 Forgot password?",
         "footer": "© 2026 Crypto IS — Global Financial Monitoring System",
         "info_box": "📋 Algorithm",
-        "info_text": "CoinGecko API • Weekdays only (Mon-Fri) • 1 hour cache"
+        "info_text": "CoinGecko API • Weekdays only (Mon-Fri) • 1 hour cache",
+        "widgets": "📊 Widgets",
+        "show_widgets": "Show widgets",
+        "refresh_widgets": "🔄 Refresh widgets",
+        "telegram": "📱 Telegram",
+        "telegram_open": "🚀 Open bot in Telegram",
+        "telegram_caption": "Get notifications about logins and alerts"
     },
     "zh": { 
         "title": "📊 Crypto IS",
@@ -162,7 +174,13 @@ translations = {
         "forgot": "🔑 忘记密码？",
         "footer": "© 2026 Crypto IS — 全球金融监控系统",
         "info_box": "📋 算法说明",
-        "info_text": "CoinGecko API • 仅工作日（周一至周五）• 1小时缓存"
+        "info_text": "CoinGecko API • 仅工作日（周一至周五）• 1小时缓存",
+        "widgets": "📊 小部件",
+        "show_widgets": "显示小部件",
+        "refresh_widgets": "🔄 刷新小部件",
+        "telegram": "📱 Telegram",
+        "telegram_open": "🚀 在Telegram中打开机器人",
+        "telegram_caption": "接收登录和警报通知"
     }
 }
 
@@ -623,29 +641,30 @@ with st.sidebar:
     st.markdown("---")
 
 
-    # ===== ВИДЖЕТЫ (теперь не зависят от show_widgets) =====
+    # ===== ВИДЖЕТЫ =====
     from widgets import fear_greed_widget, top_crypto_widget
-    st.subheader("📊 Виджеты")
-    show_widgets = st.checkbox("Показывать виджеты", value=True)
+    st.subheader(t["widgets"])
+    show_widgets = st.checkbox(t["show_widgets"], value=True)
     if show_widgets:
         if asset_type == t["crypto"]:
             if "(" in symbol and ")" in symbol:
                 clean_symbol = symbol.split("(")[1].split(")")[0]
-            else: clean_symbol = symbol
+            else: 
+                clean_symbol = symbol
             fear_greed_widget(asset_type, clean_symbol)
         else:
             fear_greed_widget(asset_type, symbol)
         top_crypto_widget()
-    if st.button("🔄 Обновить виджеты", use_container_width=True):
+    if st.button(t["refresh_widgets"], use_container_width=True):
         from widgets import refresh_widgets
         refresh_widgets()
         st.rerun()
     st.markdown("---")
 
     # ===== TELEGRAM =====
-    st.subheader("📱 Telegram")
-    st.markdown("""<a href="https://t.me/crypto_is_notify_bot" target="_blank"><button style="background: linear-gradient(135deg, #229ED9, #1C93E3); color: white; border: none; padding: 10px 20px; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; width: 100%;">🚀 Открыть бота в Telegram</button></a>""", unsafe_allow_html=True)
-    st.caption("Получайте уведомления о входах и алерты")
+    st.subheader(t["telegram"])
+    st.markdown(f"""<a href="https://t.me/crypto_is_notify_bot" target="_blank"><button style="background: linear-gradient(135deg, #229ED9, #1C93E3); color: white; border: none; padding: 10px 20px; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; width: 100%;">{t['telegram_open']}</button></a>""", unsafe_allow_html=True)
+    st.caption(t["telegram_caption"])
     st.markdown("---")
     
     # ===== ИНФОРМАЦИОННЫЙ БЛОК =====
