@@ -348,9 +348,9 @@ st.title("📈 Трейдинговый терминал")
 # ============================================
 # БЕГУЩАЯ СТРОКА (ТИКЕР)
 # ============================================
-with st.spinner("Загрузка рыночных данных..."):
-    ticker_html = get_ticker_data_cached()
-    st.markdown(ticker_html, unsafe_allow_html=True)
+#with st.spinner("Загрузка рыночных данных..."):
+ #   ticker_html = get_ticker_data_cached()
+  #  st.markdown(ticker_html, unsafe_allow_html=True)
 
 # ============================================
 # ВЕРХНЯЯ ПАНЕЛЬ
