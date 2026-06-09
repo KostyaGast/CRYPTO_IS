@@ -610,63 +610,72 @@ with st.sidebar:
         ["1 день", "7 дней", "14 дней", "30 дней", "Своя дата"]
     )
 
-        # ===== БЫСТРЫЕ КНОПКИ =====
+    # ===== БЫСТРЫЕ КНОПКИ =====
     st.markdown("**⚡ Быстрый выбор:**")
     col_q1, col_q2, col_q3, col_q4 = st.columns(4)
-    
-    if "custom_start" not in st.session_state:
-        st.session_state.custom_start = datetime.now() - timedelta(days=30)
-    if "custom_end" not in st.session_state:
-        st.session_state.custom_end = datetime.now()
     
     today = datetime.now()
     
     with col_q1:
         if st.button("📆 Прошлая неделя"):
-            # Последняя ПОЛНАЯ неделя (пн-вс или просто сдвиг)
-            st.session_state.custom_end = today - timedelta(days=today.weekday() + 1)  # последнее воскресенье
-            st.session_state.custom_start = st.session_state.custom_end - timedelta(days=7)
-            st.session_state.period_override = "Своя дата"
+            # Прошлая неделя: с понедельника по воскресенье
+            days_since_monday = today.weekday()
+            last_monday = today - timedelta(days=days_since_monday + 7)
+            last_sunday = last_monday + timedelta(days=6)
+            st.session_state.custom_start = last_monday
+            st.session_state.custom_end = last_sunday
+            st.session_state.use_custom = True
+            st.rerun()
     
     with col_q2:
         if st.button("📅 Прошлый месяц"):
-            # Первый день предыдущего месяца по последний день предыдущего месяца
-            first_of_this_month = today.replace(day=1)
-            last_of_prev_month = first_of_this_month - timedelta(days=1)
-            first_of_prev_month = last_of_prev_month.replace(day=1)
-            st.session_state.custom_start = first_of_prev_month
-            st.session_state.custom_end = last_of_prev_month
-            st.session_state.period_override = "Своя дата"
+            # Прошлый месяц: первый день прошлого месяца по последний день прошлого месяца
+            first_of_current = today.replace(day=1)
+            last_of_previous = first_of_current - timedelta(days=1)
+            first_of_previous = last_of_previous.replace(day=1)
+            st.session_state.custom_start = first_of_previous
+            st.session_state.custom_end = last_of_previous
+            st.session_state.use_custom = True
+            st.rerun()
     
     with col_q3:
         if st.button("🗓️ Этот год"):
             st.session_state.custom_start = datetime(today.year, 1, 1)
             st.session_state.custom_end = today
-            st.session_state.period_override = "Своя дата"
+            st.session_state.use_custom = True
+            st.rerun()
     
     with col_q4:
         if st.button("📊 Максимум"):
             st.session_state.custom_start = datetime(2020, 1, 1)
             st.session_state.custom_end = today
-            st.session_state.period_override = "Своя дата"
+            st.session_state.use_custom = True
+            st.rerun()
+
+    # Инициализация session_state
+    if "custom_start" not in st.session_state:
+        st.session_state.custom_start = today - timedelta(days=30)
+    if "custom_end" not in st.session_state:
+        st.session_state.custom_end = today
+    if "use_custom" not in st.session_state:
+        st.session_state.use_custom = False
 
     # Определяем период
-    use_custom = period_option == "Своя дата" or st.session_state.get("period_override") == "Своя дата"
-    
-    if use_custom:
+    if period_option == "Своя дата" or st.session_state.use_custom:
         start_date = st.date_input("С", value=st.session_state.custom_start)
         end_date = st.date_input("По", value=st.session_state.custom_end)
         days = (end_date - start_date).days
         if days < 1:
             days = 1
-        # Сохраняем для синхронизации
+        # Обновляем session_state
         st.session_state.custom_start = start_date
         st.session_state.custom_end = end_date
-        st.session_state.period_override = None
+        st.session_state.use_custom = True
     else:
         days = int(period_option.split()[0])
-        st.session_state.custom_start = datetime.now() - timedelta(days=days)
-        st.session_state.custom_end = datetime.now()
+        st.session_state.custom_start = today - timedelta(days=days)
+        st.session_state.custom_end = today
+        st.session_state.use_custom = False
 
     refresh = st.button(t["refresh"], use_container_width=True)
     st.markdown("---")
