@@ -651,10 +651,10 @@ with st.sidebar:
                 clean_symbol = symbol.split("(")[1].split(")")[0]
             else: 
                 clean_symbol = symbol
-            fear_greed_widget(asset_type, clean_symbol, lang=lang)
+            fear_greed_widget(asset_type, clean_symbol)
         else:
-            fear_greed_widget(asset_type, symbol, lang=lang)
-        top_crypto_widget(lang=lang)
+            fear_greed_widget(asset_type, symbol)
+        top_crypto_widget()
     if st.button(t["refresh_widgets"], use_container_width=True):
         from widgets import refresh_widgets
         refresh_widgets()
