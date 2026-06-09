@@ -607,55 +607,64 @@ with st.sidebar:
     # ===== ВЫБОР ПЕРИОДА =====
     period_option = st.selectbox(
         "📅 Период",
-        ["1 день", "7 дней", "14 дней", "30 дней", "Своя дата"],
-        key="period_option"
+        ["1 день", "7 дней", "14 дней", "30 дней", "Своя дата"]
     )
-    
-    # Инициализация переменных
-    if "start_date" not in st.session_state:
-        st.session_state.start_date = datetime.now() - timedelta(days=30)
-    if "end_date" not in st.session_state:
-        st.session_state.end_date = datetime.now()
 
     # ===== БЫСТРЫЕ КНОПКИ =====
     st.markdown("**⚡ Быстрый выбор:**")
     col_q1, col_q2, col_q3, col_q4 = st.columns(4)
     
+    # Обработка кнопок через session_state
+    if "custom_start" not in st.session_state:
+        st.session_state.custom_start = datetime.now() - timedelta(days=30)
+    if "custom_end" not in st.session_state:
+        st.session_state.custom_end = datetime.now()
+    
     with col_q1:
-        if st.button("📆 Прошлая неделя", key="week_btn"):
-            st.session_state.start_date = datetime.now() - timedelta(days=7)
-            st.session_state.end_date = datetime.now()
-            st.rerun()
+        if st.button("📆 Прошлая неделя"):
+            st.session_state.custom_start = datetime.now() - timedelta(days=7)
+            st.session_state.custom_end = datetime.now()
+            st.session_state.period_override = "Своя дата"
     
     with col_q2:
-        if st.button("📅 Прошлый месяц", key="month_btn"):
-            st.session_state.start_date = datetime.now() - timedelta(days=30)
-            st.session_state.end_date = datetime.now()
-            st.rerun()
+        if st.button("📅 Прошлый месяц"):
+            st.session_state.custom_start = datetime.now() - timedelta(days=30)
+            st.session_state.custom_end = datetime.now()
+            st.session_state.period_override = "Своя дата"
     
     with col_q3:
-        if st.button("🗓️ Этот год", key="year_btn"):
-            st.session_state.start_date = datetime.now() - timedelta(days=365)
-            st.session_state.end_date = datetime.now()
-            st.rerun()
+        if st.button("🗓️ Этот год"):
+            st.session_state.custom_start = datetime.now() - timedelta(days=365)
+            st.session_state.custom_end = datetime.now()
+            st.session_state.period_override = "Своя дата"
     
     with col_q4:
-        if st.button("📊 Максимум", key="max_btn"):
-            st.session_state.start_date = datetime(2020, 1, 1)
-            st.session_state.end_date = datetime.now()
-            st.rerun()
+        if st.button("📊 Максимум"):
+            st.session_state.custom_start = datetime(2020, 1, 1)
+            st.session_state.custom_end = datetime.now()
+            st.session_state.period_override = "Своя дата"
 
-    if period_option == "Своя дата":
-        col1, col2 = st.columns(2)
-        with col1: start_date = st.date_input("С", value=datetime.now() - timedelta(days=30))
-        with col2: end_date = st.date_input("По", value=datetime.now())
+    # Определяем период
+    use_custom = period_option == "Своя дата" or st.session_state.get("period_override") == "Своя дата"
+    
+    if use_custom:
+        start_date = st.date_input("С", value=st.session_state.custom_start)
+        end_date = st.date_input("По", value=st.session_state.custom_end)
         days = (end_date - start_date).days
-        if days < 1: days = 1
+        if days < 1:
+            days = 1
+        # Сохраняем для синхронизации
+        st.session_state.custom_start = start_date
+        st.session_state.custom_end = end_date
+        st.session_state.period_override = None
     else:
         days = int(period_option.split()[0])
+        st.session_state.custom_start = datetime.now() - timedelta(days=days)
+        st.session_state.custom_end = datetime.now()
 
     refresh = st.button(t["refresh"], use_container_width=True)
     st.markdown("---")
+
 
     # ===== ВИДЖЕТЫ (теперь не зависят от show_widgets) =====
     from widgets import fear_greed_widget, top_crypto_widget
