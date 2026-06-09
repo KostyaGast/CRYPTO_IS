@@ -4,9 +4,26 @@
 import streamlit as st
 import requests
 import pandas as pd
+import json
+from pathlib import Path
 
-# Поддержка языков (передаётся из main.py)
-def get_text(key, lang="ru"):
+def get_user_lang():
+    """Получает язык пользователя из настроек"""
+    try:
+        if st.session_state.get("authenticated", False):
+            user_id = st.session_state["user"].get("id")
+            settings_file = Path(__file__).resolve().parent.parent / "data" / f"settings_{user_id}.json"
+            if settings_file.exists():
+                with open(settings_file, "r", encoding="utf-8") as f:
+                    settings = json.load(f)
+                    return settings.get("language", "ru")
+    except:
+        pass
+    return "ru"
+
+def get_text(key):
+    """Возвращает перевод на язык пользователя"""
+    lang = get_user_lang()
     texts = {
         "ru": {
             "market_activity": "📊 Активность рынка ({})",
@@ -186,9 +203,9 @@ def fetch_top_crypto():
     except:
         return None
 
-def fear_greed_widget(asset_type="crypto", symbol=None, lang="ru"):
+def fear_greed_widget(asset_type="crypto", symbol=None):
     """Контекстный виджет активности."""
-    t = get_text(lang)
+    t = get_text
     
     if asset_type == "Криптовалюта" or asset_type == "crypto":
         if symbol:
@@ -202,19 +219,19 @@ def fear_greed_widget(asset_type="crypto", symbol=None, lang="ru"):
 
                 st.markdown(f"""
                 <div style="background: #1a1c23; border-radius: 10px; padding: 15px; margin-bottom: 10px;">
-                    <h4 style="margin: 0 0 10px 0;">{t['market_activity'].format(symbol)}</h4>
+                    <h4 style="margin: 0 0 10px 0;">{t('market_activity').format(symbol)}</h4>
                     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
                         <span style="font-size: 32px;">{emoji}</span>
                         <div style="flex: 1;">
                             <div style="font-size: 20px; font-weight: bold; color: #aaa;">{data['status']}</div>
-                            <div style="color: #aaa; font-size: 12px;">{t['volume'].format(int(data['current_volume']))}</div>
+                            <div style="color: #aaa; font-size: 12px;">{t('volume').format(int(data['current_volume']))}</div>
                         </div>
                     </div>
                     <details>
-                        <summary style="color: #888; font-size: 12px; cursor: pointer;">{t['what_mean']}</summary>
+                        <summary style="color: #888; font-size: 12px; cursor: pointer;">{t('what_mean')}</summary>
                         <p style="color: #aaa; font-size: 12px; margin-top: 8px; padding: 8px; background: #0e1117; border-radius: 5px;">
                         {data['advice']}<br><br>
-                        {t['current_volume_pct'].format(data['ratio'])}
+                        {t('current_volume_pct').format(data['ratio'])}
                         </p>
                     </details>
                 </div>
@@ -222,15 +239,15 @@ def fear_greed_widget(asset_type="crypto", symbol=None, lang="ru"):
             else:
                 st.markdown(f"""
                 <div style="background: #1a1c23; border-radius: 10px; padding: 15px; margin-bottom: 10px;">
-                    <h4 style="margin: 0 0 10px 0;">{t['market_activity'].format(symbol)}</h4>
-                    <div style="color: #aaa;">{t['no_data']}</div>
+                    <h4 style="margin: 0 0 10px 0;">{t('market_activity').format(symbol)}</h4>
+                    <div style="color: #aaa;">{t('no_data')}</div>
                 </div>
                 """, unsafe_allow_html=True)
         else:
             st.markdown(f"""
             <div style="background: #1a1c23; border-radius: 10px; padding: 15px; margin-bottom: 10px;">
-                <h4 style="margin: 0 0 10px 0;">{t['market_activity'].format('')}</h4>
-                <div style="color: #aaa;">{t['select_asset']}</div>
+                <h4 style="margin: 0 0 10px 0;">{t('market_activity').format('')}</h4>
+                <div style="color: #aaa;">{t('select_asset')}</div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -246,19 +263,19 @@ def fear_greed_widget(asset_type="crypto", symbol=None, lang="ru"):
 
                 st.markdown(f"""
                 <div style="background: #1a1c23; border-radius: 10px; padding: 15px; margin-bottom: 10px;">
-                    <h4 style="margin: 0 0 10px 0;">{t['market_activity'].format(symbol)}</h4>
+                    <h4 style="margin: 0 0 10px 0;">{t('market_activity').format(symbol)}</h4>
                     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
                         <span style="font-size: 32px;">{emoji}</span>
                         <div style="flex: 1;">
                             <div style="font-size: 20px; font-weight: bold; color: #aaa;">{data['status']}</div>
-                            <div style="color: #aaa; font-size: 12px;">{t['volume'].format(int(data['current_volume']))}</div>
+                            <div style="color: #aaa; font-size: 12px;">{t('volume').format(int(data['current_volume']))}</div>
                         </div>
                     </div>
                     <details>
-                        <summary style="color: #888; font-size: 12px; cursor: pointer;">{t['what_mean']}</summary>
+                        <summary style="color: #888; font-size: 12px; cursor: pointer;">{t('what_mean')}</summary>
                         <p style="color: #aaa; font-size: 12px; margin-top: 8px; padding: 8px; background: #0e1117; border-radius: 5px;">
                         {data['advice']}<br><br>
-                        {t['current_volume_pct'].format(data['ratio'])}
+                        {t('current_volume_pct').format(data['ratio'])}
                         </p>
                     </details>
                 </div>
@@ -266,36 +283,36 @@ def fear_greed_widget(asset_type="crypto", symbol=None, lang="ru"):
             else:
                 st.markdown(f"""
                 <div style="background: #1a1c23; border-radius: 10px; padding: 15px; margin-bottom: 10px;">
-                    <h4 style="margin: 0 0 10px 0;">{t['market_activity'].format(symbol)}</h4>
-                    <div style="color: #aaa;">{t['no_data']}</div>
+                    <h4 style="margin: 0 0 10px 0;">{t('market_activity').format(symbol)}</h4>
+                    <div style="color: #aaa;">{t('no_data')}</div>
                 </div>
                 """, unsafe_allow_html=True)
         else:
             st.markdown(f"""
             <div style="background: #1a1c23; border-radius: 10px; padding: 15px; margin-bottom: 10px;">
-                <h4 style="margin: 0 0 10px 0;">{t['market_activity'].format('')}</h4>
-                <div style="color: #aaa;">{t['select_asset']}</div>
+                <h4 style="margin: 0 0 10px 0;">{t('market_activity').format('')}</h4>
+                <div style="color: #aaa;">{t('select_asset')}</div>
             </div>
             """, unsafe_allow_html=True)
 
-def top_crypto_widget(lang="ru"):
+def top_crypto_widget():
     """Виджет топ-3 криптовалют с объяснением."""
-    t = get_text(lang)
+    t = get_text
     data = fetch_top_crypto()
     
     if data:
         st.markdown(f"""
         <div style="background: #1a1c23; border-radius: 10px; padding: 15px;">
-            <h4 style="margin: 0 0 10px 0;">{t['top_crypto']}</h4>
+            <h4 style="margin: 0 0 10px 0;">{t('top_crypto')}</h4>
             <p style="color: #888; font-size: 11px; margin-bottom: 10px;">
-                {t['top_crypto_sub']}
+                {t('top_crypto_sub')}
             </p>
         """, unsafe_allow_html=True)
         
         coins = [
-            ("₿ Bitcoin", data.get("bitcoin", {}), "#F7931A", t['btc_desc']),
-            ("💎 Ethereum", data.get("ethereum", {}), "#627EEA", t['eth_desc']),
-            ("🟡 BNB", data.get("binancecoin", {}), "#F0B90B", t['bnb_desc'])
+            ("₿ Bitcoin", data.get("bitcoin", {}), "#F7931A", t('btc_desc')),
+            ("💎 Ethereum", data.get("ethereum", {}), "#627EEA", t('eth_desc')),
+            ("🟡 BNB", data.get("binancecoin", {}), "#F0B90B", t('bnb_desc'))
         ]
         
         for name, coin_data, color, description in coins:
@@ -315,11 +332,11 @@ def top_crypto_widget(lang="ru"):
         
         st.markdown(f"""
             <details>
-                <summary style="color: #888; font-size: 12px; cursor: pointer;">{t['why_these']}</summary>
+                <summary style="color: #888; font-size: 12px; cursor: pointer;">{t('why_these')}</summary>
                 <p style="color: #aaa; font-size: 12px; margin-top: 8px; padding: 8px; background: #0e1117; border-radius: 5px;">
-                <b>Bitcoin (BTC)</b> — {t['btc_desc']}<br>
-                <b>Ethereum (ETH)</b> — {t['eth_desc']}<br>
-                <b>BNB</b> — {t['bnb_desc']}
+                <b>Bitcoin (BTC)</b> — {t('btc_desc')}<br>
+                <b>Ethereum (ETH)</b> — {t('eth_desc')}<br>
+                <b>BNB</b> — {t('bnb_desc')}
                 </p>
             </details>
         </div>
@@ -327,8 +344,8 @@ def top_crypto_widget(lang="ru"):
     else:
         st.markdown(f"""
         <div style="background: #1a1c23; border-radius: 10px; padding: 15px;">
-            <h4 style="margin: 0 0 10px 0;">{t['top_crypto']}</h4>
-            <div style="color: #aaa;">{t['no_data']}</div>
+            <h4 style="margin: 0 0 10px 0;">{t('top_crypto')}</h4>
+            <div style="color: #aaa;">{t('no_data')}</div>
         </div>
         """, unsafe_allow_html=True)
 
